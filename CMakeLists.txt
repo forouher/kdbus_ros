@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(kdbus_tests)
 
-#add_definitions(-std=c++11)
-#SET(CMAKE_CXX_FLAGS "-std=c++0x")
+#add_definitions(-std=c1)
+#SET(CMAKE_CXX_FLAGS "-std=std99")
+SET(CMAKE_C_FLAGS "-std=gnu99")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -47,3 +48,4 @@ add_executable(test_reader src/test_reader.cpp)
 
 target_link_libraries(test_reader ${catkin_LIBRARIES})
 target_link_libraries(test_writer ${catkin_LIBRARIES})
+
