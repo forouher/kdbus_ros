@@ -1,0 +1,11 @@
+<library path="lib/libkdbus_tests">
+
+  <class name="kdbus_tests/talker" type="kdbus_tests::talker" base_class_type="nodelet::Nodelet">
+    <description></description>
+  </class>
+
+  <class name="kdbus_tests/listener" type="kdbus_tests::listener" base_class_type="nodelet::Nodelet">
+    <description></description>
+  </class>
+
+</library>

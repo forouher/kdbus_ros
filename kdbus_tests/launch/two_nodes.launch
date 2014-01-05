@@ -1,0 +1,19 @@
+<launch>
+
+  <node name="talker"
+        pkg="nodelet"
+        type="nodelet"
+	args="standalone kdbus_tests/talker"
+	output="screen">
+    <param name="size" value="100000" />
+    <param name="period" value="0.1" />
+  </node>
+
+  <node name="listener"
+        pkg="nodelet"
+        type="nodelet"
+	args="standalone kdbus_tests/listener"
+	output="screen">
+  </node>
+
+</launch>

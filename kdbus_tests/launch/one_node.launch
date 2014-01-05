@@ -1,0 +1,26 @@
+<launch>
+
+  <node name="manager1"
+        pkg="nodelet"
+        type="nodelet"
+	args="manager"
+	output="screen">
+  </node>
+
+  <node name="talker"
+        pkg="nodelet"
+        type="nodelet"
+	args="load kdbus_tests/talker manager1 --no-bond"
+	output="screen">
+    <param name="size" value="1000000" />
+    <param name="period" value="0.1" />
+  </node>
+
+  <node name="listener"
+        pkg="nodelet"
+        type="nodelet"
+	args="load kdbus_tests/listener manager1 --no-bond"
+	output="screen">
+  </node>
+
+</launch>
