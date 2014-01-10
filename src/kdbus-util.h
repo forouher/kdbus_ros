@@ -6,11 +6,12 @@
  * Free Software Foundation; either version 2.1 of the License, or (at
  * your option) any later version.
  */
-#pragma once
+#ifndef KDBUS_UTIL_H
+#define KDBUS_UTIL_H
 
 #define BIT(X) (1 << (X))
 
-#include "../kdbus.h"
+#include "kdbus.h"
 
 #define _STRINGIFY(x) #x
 #define STRINGIFY(x) _STRINGIFY(x)
@@ -36,7 +37,6 @@ struct conn {
 	size_t size;
 };
 
-/*
 int name_list(struct conn *conn, uint64_t flags);
 int name_release(struct conn *conn, const char *name);
 int name_acquire(struct conn *conn, const char *name, uint64_t flags);
@@ -51,4 +51,4 @@ struct kdbus_item *make_policy_access(__u64 type, __u64 bits, __u64 id);
 int upload_policy(int fd, const char *name);
 void add_match_empty(int fd);
 
-*/
+#endif

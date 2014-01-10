@@ -43,9 +43,12 @@ include_directories(include
 )
 
 # Declare a cpp executable
-add_executable(test_writer src/test_writer.cpp)
-add_executable(test_reader src/test_reader.cpp)
+add_executable(talko src/talker.cpp)
+add_executable(alloc_test src/alloc_test.cpp)
+add_executable(test_writer src/kdbus-enum.c src/kdbus-util.c src/test_writer.cpp)
+add_executable(test_reader src/kdbus-enum.c src/kdbus-util.c src/test_reader.cpp)
 
+target_link_libraries(talko ${catkin_LIBRARIES})
 target_link_libraries(test_reader ${catkin_LIBRARIES})
 target_link_libraries(test_writer ${catkin_LIBRARIES})
 
