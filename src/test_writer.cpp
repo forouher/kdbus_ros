@@ -26,6 +26,137 @@ extern "C"
 
 }
 
+int msg_send_dis(const struct conn *conn, const char *name, uint64_t cookie, uint64_t dst_id);
+
+size_t offset_alloc = sizeof(ros::allocator<void>);
+size_t offset_struct = sizeof(std_msgs::String_<ros::allocator<void> >);
+
+int msg_send(const struct conn *conn,
+		    const char *name,
+		    uint64_t cookie,
+		    uint64_t dst_id)
+{
+	struct kdbus_msg *msg;
+	const char ref1[1024 * 1024 + 3] = "0123456789_0";
+	const char ref2[] = "0123456789_1";
+	struct kdbus_item *item;
+	uint64_t size;
+	int memfd = -1;
+	int ret;
+
+	size = sizeof(struct kdbus_msg);
+	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_vec));
+	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_vec));
+	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_vec));
+
+	if (dst_id == KDBUS_DST_ID_BROADCAST)
+		size += KDBUS_ITEM_HEADER_SIZE + 64;
+	else {
+		ret = ioctl(conn->fd, KDBUS_CMD_MEMFD_NEW, &memfd);
+		if (ret < 0) {
+			fprintf(stderr, "KDBUS_CMD_MEMFD_NEW failed: %m\n");
+			return EXIT_FAILURE;
+		}
+
+		fprintf(stderr,"1\n");
+		char* address_fd = (char*)mmap(NULL, 1000,PROT_WRITE,MAP_SHARED,memfd,0);
+		if (MAP_FAILED == address_fd) {
+			fprintf(stderr, "mmap() to memfd failed: %m\n");
+			return EXIT_FAILURE;
+		}
+
+		std_msgs::String_<ros::allocator<void> > msg_pub;
+		msg_pub.data = "Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdkfohdkhopdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdkhop";
+
+		ros::allocator<void>* my_alloc = new(address_fd) ros::allocator<void>(address_fd+offset_alloc+offset_struct);
+		std_msgs::String_<ros::allocator<void> >* msg_kdbus = new(address_fd+offset_alloc) std_msgs::String_<ros::allocator<void> >(*my_alloc);
+		*msg_kdbus = msg_pub;
+
+//		fprintf(stderr,"2: %p\n", address_fd);
+		//memcpy(address_fd, "test string", 12);
+		munmap(address_fd,1000);
+
+/*
+		if (write(memfd, "kdbus memfd 1234567", 19) != 19) {
+*/
+
+		ret = ioctl(memfd, KDBUS_CMD_MEMFD_SEAL_SET, true);
+		if (ret < 0) {
+			fprintf(stderr, "memfd sealing failed: %m\n");
+			return EXIT_FAILURE;
+		}
+
+		size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_memfd));
+	}
+
+	if (name)
+		size += KDBUS_ITEM_SIZE(strlen(name) + 1);
+
+	msg = (kdbus_msg*)malloc(size);
+	if (!msg) {
+		fprintf(stderr, "unable to malloc()!?\n");
+		return EXIT_FAILURE;
+	}
+
+	memset(msg, 0, size);
+	msg->size = size;
+	msg->src_id = conn->id;
+	msg->dst_id = name ? 0 : dst_id;
+	msg->cookie = cookie;
+	msg->payload_type = KDBUS_PAYLOAD_DBUS;
+
+	item = msg->items;
+
+	if (name) {
+		item->type = KDBUS_ITEM_DST_NAME;
+		item->size = KDBUS_ITEM_HEADER_SIZE + strlen(name) + 1;
+		strcpy(item->str, name);
+		item = KDBUS_ITEM_NEXT(item);
+	}
+
+	item->type = KDBUS_ITEM_PAYLOAD_VEC;
+	item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_vec);
+	item->vec.address = (uintptr_t)&ref1;
+	item->vec.size = sizeof(ref1);
+	item = KDBUS_ITEM_NEXT(item);
+
+	/* data padding for ref1 */
+	item->type = KDBUS_ITEM_PAYLOAD_VEC;
+	item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_vec);
+	item->vec.address = (uintptr_t)NULL;
+	item->vec.size =  KDBUS_ALIGN8(sizeof(ref1)) - sizeof(ref1);
+	item = KDBUS_ITEM_NEXT(item);
+
+	item->type = KDBUS_ITEM_PAYLOAD_VEC;
+	item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_vec);
+	item->vec.address = (uintptr_t)&ref2;
+	item->vec.size = sizeof(ref2);
+	item = KDBUS_ITEM_NEXT(item);
+
+	if (dst_id == KDBUS_DST_ID_BROADCAST) {
+		item->type = KDBUS_ITEM_BLOOM;
+		item->size = KDBUS_ITEM_HEADER_SIZE + 64;
+	} else {
+		item->type = KDBUS_ITEM_PAYLOAD_MEMFD;
+		item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_memfd);
+		item->memfd.size = 16;
+		item->memfd.fd = memfd;
+	}
+	item = KDBUS_ITEM_NEXT(item);
+
+	ret = ioctl(conn->fd, KDBUS_CMD_MSG_SEND, msg);
+	if (ret < 0) {
+		fprintf(stderr, "error sending message: %d err %d (%m)\n", ret, errno);
+		return EXIT_FAILURE;
+	}
+
+	if (memfd >= 0)
+		close(memfd);
+	free(msg);
+
+	return 0;
+}
+
 
 int main(int argc, char *argv[])
 {

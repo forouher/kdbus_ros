@@ -88,7 +88,7 @@ struct conn *connect_to_bus(const char *path, uint64_t hello_flags)
 	return conn;
 }
 
-int msg_send(const struct conn *conn,
+int msg_send_dis(const struct conn *conn,
 		    const char *name,
 		    uint64_t cookie,
 		    uint64_t dst_id)
@@ -115,10 +115,22 @@ int msg_send(const struct conn *conn,
 			return EXIT_FAILURE;
 		}
 
-		if (write(memfd, "kdbus memfd 1234567", 19) != 19) {
-			fprintf(stderr, "writing to memfd failed: %m\n");
+		fprintf(stderr,"1\n");
+		void* address_fd = mmap(NULL, 1000,PROT_WRITE,MAP_SHARED,memfd,0);
+		if (MAP_FAILED == address_fd) {
+			fprintf(stderr, "mmap() to memfd failed: %m\n");
 			return EXIT_FAILURE;
 		}
+
+		fprintf(stderr,"2: %p\n", address_fd);
+		memcpy(address_fd, "test string", 12);
+		fprintf(stderr,"3\n");
+		munmap(address_fd,1000);
+		fprintf(stderr,"4\n");
+
+/*
+		if (write(memfd, "kdbus memfd 1234567", 19) != 19) {
+*/
 
 		ret = ioctl(memfd, KDBUS_CMD_MEMFD_SEAL_SET, true);
 		if (ret < 0) {
@@ -207,7 +219,7 @@ char *msg_id(uint64_t id, char *buf)
 	return buf;
 }
 
-void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
+void msg_dump_dis(const struct conn *conn, const struct kdbus_msg *msg)
 {
 	const struct kdbus_item *item = msg->items;
 	char buf_src[32];
@@ -391,29 +403,6 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 	printf("\n");
 }
 
-int msg_recv(struct conn *conn)
-{
-	uint64_t off;
-	struct kdbus_msg *msg;
-	int ret;
-
-	ret = ioctl(conn->fd, KDBUS_CMD_MSG_RECV, &off);
-	if (ret < 0) {
-		fprintf(stderr, "error receiving message: %d (%m)\n", ret);
-		return EXIT_FAILURE;
-	}
-
-	msg = (struct kdbus_msg *)(conn->buf + off);
-	msg_dump(conn, msg);
-
-	ret = ioctl(conn->fd, KDBUS_CMD_FREE, &off);
-	if (ret < 0) {
-		fprintf(stderr, "error free message: %d (%m)\n", ret);
-		return EXIT_FAILURE;
-	}
-
-	return 0;
-}
 
 int name_acquire(struct conn *conn, const char *name, uint64_t flags)
 {

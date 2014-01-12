@@ -20,7 +20,223 @@ extern "C"
 #include "kdbus-enum.h"
 }
 
+#include "std_msgs/String.h"
+
 #define KBUILD_MODNAME "kdbus"
+
+void msg_dump(const struct conn *conn, const struct kdbus_msg *msg);
+
+int msg_recv(struct conn *conn)
+{
+	uint64_t off;
+	struct kdbus_msg *msg;
+	int ret;
+
+	ret = ioctl(conn->fd, KDBUS_CMD_MSG_RECV, &off);
+	if (ret < 0) {
+		fprintf(stderr, "error receiving message: %d (%m)\n", ret);
+		return EXIT_FAILURE;
+	}
+
+	msg = (struct kdbus_msg *)(conn->buf + off);
+	msg_dump(conn, msg);
+
+	ret = ioctl(conn->fd, KDBUS_CMD_FREE, &off);
+	if (ret < 0) {
+		fprintf(stderr, "error free message: %d (%m)\n", ret);
+		return EXIT_FAILURE;
+	}
+
+	return 0;
+}
+
+void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
+{
+	const struct kdbus_item *item = msg->items;
+	char buf_src[32];
+	char buf_dst[32];
+	uint64_t timeout = 0;
+	uint64_t cookie_reply = 0;
+
+	if (msg->flags & KDBUS_MSG_FLAGS_EXPECT_REPLY)
+		timeout = msg->timeout_ns;
+	else
+		cookie_reply = msg->cookie_reply;
+
+	printf("MESSAGE: %s (%llu bytes) flags=0x%08llx, %s → %s, cookie=%llu, timeout=%llu cookie_reply=%llu\n",
+		enum_PAYLOAD(msg->payload_type), (unsigned long long)msg->size,
+		(unsigned long long)msg->flags,
+		msg_id(msg->src_id, buf_src), msg_id(msg->dst_id, buf_dst),
+		(unsigned long long)msg->cookie, (unsigned long long)timeout, (unsigned long long)cookie_reply);
+
+	KDBUS_ITEM_FOREACH(item, msg, items) {
+		if (item->size <= KDBUS_ITEM_HEADER_SIZE) {
+			printf("  +%s (%llu bytes) invalid data record\n", enum_MSG(item->type), item->size);
+			break;
+		}
+
+		switch (item->type) {
+		case KDBUS_ITEM_PAYLOAD_OFF: {
+			const char *s;
+
+			if (item->vec.offset == ~0ULL)
+				s = "[\\0-bytes]";
+			else
+				s = (char *)conn->buf + item->vec.offset;
+
+			printf("  +%s (%llu bytes) off=%llu size=%llu '%s'\n",
+			       enum_MSG(item->type), item->size,
+			       (unsigned long long)item->vec.offset,
+			       (unsigned long long)item->vec.size, s);
+			break;
+		}
+
+		case KDBUS_ITEM_PAYLOAD_MEMFD: {
+			char *buf;
+			uint64_t size;
+
+			buf = (char*)mmap(NULL, item->memfd.size, PROT_READ, MAP_SHARED, item->memfd.fd, 0);
+			if (buf == MAP_FAILED) {
+				printf("mmap() fd=%i failed:%m", item->memfd.fd);
+				break;
+			}
+
+			if (ioctl(item->memfd.fd, KDBUS_CMD_MEMFD_SIZE_GET, &size) < 0) {
+				fprintf(stderr, "KDBUS_CMD_MEMFD_SIZE_GET failed: %m\n");
+				break;
+			}
+
+			size_t offset_alloc = sizeof(ros::allocator<void>);
+			std_msgs::String_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<std_msgs::String_<ros::allocator<void> >* >(buf+offset_alloc);
+
+			printf("  +%s (%llu bytes) fd=%i size=%llu filesize=%llu '%s'\n",
+			       enum_MSG(item->type), item->size, item->memfd.fd,
+			       (unsigned long long)item->memfd.size, (unsigned long long)size, msg_kdbus2->data.c_str());
+			break;
+		}
+
+		case KDBUS_ITEM_CREDS:
+			printf("  +%s (%llu bytes) uid=%lld, gid=%lld, pid=%lld, tid=%lld, starttime=%lld\n",
+				enum_MSG(item->type), item->size,
+				item->creds.uid, item->creds.gid,
+				item->creds.pid, item->creds.tid,
+				item->creds.starttime);
+			break;
+
+		case KDBUS_ITEM_PID_COMM:
+		case KDBUS_ITEM_TID_COMM:
+		case KDBUS_ITEM_EXE:
+		case KDBUS_ITEM_CGROUP:
+		case KDBUS_ITEM_SECLABEL:
+		case KDBUS_ITEM_DST_NAME:
+			printf("  +%s (%llu bytes) '%s' (%zu)\n",
+			       enum_MSG(item->type), item->size, item->str, strlen(item->str));
+			break;
+
+		case KDBUS_ITEM_NAME: {
+			printf("  +%s (%llu bytes) '%s' (%zu) flags=0x%08llx\n",
+			       enum_MSG(item->type), item->size, item->name.name, strlen(item->name.name),
+			       item->name.flags);
+			break;
+		}
+
+		case KDBUS_ITEM_CMDLINE: {
+			size_t size = item->size - KDBUS_ITEM_HEADER_SIZE;
+			const char *str = item->str;
+			int count = 0;
+
+			printf("  +%s (%llu bytes) ", enum_MSG(item->type), item->size);
+			while (size) {
+				printf("'%s' ", str);
+				size -= strlen(str) + 1;
+				str += strlen(str) + 1;
+				count++;
+			}
+
+			printf("(%d string%s)\n", count, (count == 1) ? "" : "s");
+			break;
+		}
+
+		case KDBUS_ITEM_AUDIT:
+			printf("  +%s (%llu bytes) loginuid=%llu sessionid=%llu\n",
+			       enum_MSG(item->type), item->size,
+			       (unsigned long long)item->data64[0],
+			       (unsigned long long)item->data64[1]);
+			break;
+
+		case KDBUS_ITEM_CAPS: {
+			int n;
+			const uint32_t *cap;
+			int i;
+
+			printf("  +%s (%llu bytes) len=%llu bytes\n",
+			       enum_MSG(item->type), item->size,
+			       (unsigned long long)item->size - KDBUS_ITEM_HEADER_SIZE);
+
+			cap = item->data32;
+			n = (item->size - KDBUS_ITEM_HEADER_SIZE) / 4 / sizeof(uint32_t);
+
+			printf("    CapInh=");
+			for (i = 0; i < n; i++)
+				printf("%08x", cap[(0 * n) + (n - i - 1)]);
+
+			printf(" CapPrm=");
+			for (i = 0; i < n; i++)
+				printf("%08x", cap[(1 * n) + (n - i - 1)]);
+
+			printf(" CapEff=");
+			for (i = 0; i < n; i++)
+				printf("%08x", cap[(2 * n) + (n - i - 1)]);
+
+			printf(" CapInh=");
+			for (i = 0; i < n; i++)
+				printf("%08x", cap[(3 * n) + (n - i - 1)]);
+			printf("\n");
+			break;
+		}
+
+		case KDBUS_ITEM_TIMESTAMP:
+			printf("  +%s (%llu bytes) realtime=%lluns monotonic=%lluns\n",
+			       enum_MSG(item->type), item->size,
+			       (unsigned long long)item->timestamp.realtime_ns,
+			       (unsigned long long)item->timestamp.monotonic_ns);
+			break;
+
+		case KDBUS_ITEM_REPLY_TIMEOUT:
+			printf("  +%s (%llu bytes) cookie=%llu\n",
+			       enum_MSG(item->type), item->size, msg->cookie_reply);
+			break;
+
+		case KDBUS_ITEM_NAME_ADD:
+		case KDBUS_ITEM_NAME_REMOVE:
+		case KDBUS_ITEM_NAME_CHANGE:
+			printf("  +%s (%llu bytes) '%s', old id=%lld, new id=%lld, old_flags=0x%llx new_flags=0x%llx\n",
+				enum_MSG(item->type), (unsigned long long) item->size,
+				item->name_change.name, item->name_change.old.id,
+				item->name_change.new2.id, item->name_change.old.flags,
+				item->name_change.new2.flags);
+			break;
+
+		case KDBUS_ITEM_ID_ADD:
+		case KDBUS_ITEM_ID_REMOVE:
+			printf("  +%s (%llu bytes) id=%llu flags=%llu\n",
+			       enum_MSG(item->type), (unsigned long long) item->size,
+			       (unsigned long long) item->id_change.id,
+			       (unsigned long long) item->id_change.flags);
+			break;
+
+		default:
+			printf("  +%s (%llu bytes)\n", enum_MSG(item->type), item->size);
+			break;
+		}
+	}
+
+	if ((char *)item - ((char *)msg + msg->size) >= 8)
+		printf("invalid padding at end of message\n");
+
+	printf("\n");
+}
+
 
 
 int main(int argc, char *argv[])

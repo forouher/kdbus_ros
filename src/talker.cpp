@@ -109,13 +109,13 @@ int main(int argc, char **argv)
     msg.data = "Hi there!";
 
     // TODO: copy msg into a shared memory location.
-    ros::malloc_allocator<char> alloc3;
-//    std_msgs::String_<ros::malloc_allocator<void> > msg2(alloc3);
+    ros::allocator<char> alloc3;
+//    std_msgs::String_<ros::allocator<void> > msg2(alloc3);
 //    msg2.data = msg.data;
 
     ros::messages::types::basic_string<char, std::char_traits<char> > u;
-    ros::messages::types::basic_string<char, std::char_traits<char>, ros::malloc_allocator<char> > s(alloc3);
-    ros::messages::types::basic_string<char, std::char_traits<char>, ros::malloc_allocator<char> > t(alloc3);
+    ros::messages::types::basic_string<char, std::char_traits<char>, ros::allocator<char> > s(alloc3);
+    ros::messages::types::basic_string<char, std::char_traits<char>, ros::allocator<char> > t(alloc3);
     t = u;
 //    u = t;
 //    s = t;
