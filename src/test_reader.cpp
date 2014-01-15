@@ -21,8 +21,19 @@ extern "C"
 }
 
 #include "std_msgs/String.h"
+#include "tf2_msgs/TFMessage.h"
 
 #define KBUILD_MODNAME "kdbus"
+
+
+void dump_memory(char* data, size_t len)
+{
+    size_t i;
+    printf("Data in [%p..%p): ",data,data+len);
+    for (i=0;i<len;i++)
+        printf("%02X ", ((unsigned char*)data)[i] );
+    printf("\n");
+}
 
 void msg_dump(const struct conn *conn, const struct kdbus_msg *msg);
 
@@ -95,7 +106,7 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 			char *buf;
 			uint64_t size;
 
-			buf = (char*)mmap(NULL, item->memfd.size, PROT_READ, MAP_SHARED, item->memfd.fd, 0);
+			buf = (char*)mmap(NULL, 1000, PROT_READ, MAP_SHARED, item->memfd.fd, 0);
 			if (buf == MAP_FAILED) {
 				printf("mmap() fd=%i failed:%m", item->memfd.fd);
 				break;
@@ -106,12 +117,18 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 				break;
 			}
 
-			size_t offset_alloc = sizeof(ros::allocator<void>);
-			std_msgs::String_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<std_msgs::String_<ros::allocator<void> >* >(buf+offset_alloc);
+			dump_memory(buf, 1000);
 
+			size_t offset_alloc = sizeof(ros::allocator<void>);
+			//std_msgs::String_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<std_msgs::String_<ros::allocator<void> >* >(buf+offset_alloc);
+//			const std_msgs::String_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<const std_msgs::String_<ros::allocator<void> >* >(buf+offset_alloc);
+			const tf2_msgs::TFMessage_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<const tf2_msgs::TFMessage_<ros::allocator<void> >* >(buf+offset_alloc);
+
+			printf("ROS: tf0=%lf  tf1=%lf tf2=%lf \n",  msg_kdbus2->transforms[0].transform.translation.x,  msg_kdbus2->transforms[1].transform.translation.x,  msg_kdbus2->transforms[2].transform.translation.x);
+			printf("ROS: size kdbus=%li\n",  msg_kdbus2->transforms.size()); // msg_kdbus2->transforms[0].header.frame_id.c_str()
 			printf("  +%s (%llu bytes) fd=%i size=%llu filesize=%llu '%s'\n",
 			       enum_MSG(item->type), item->size, item->memfd.fd,
-			       (unsigned long long)item->memfd.size, (unsigned long long)size, msg_kdbus2->data.c_str());
+			       (unsigned long long)item->memfd.size, (unsigned long long)size, msg_kdbus2->transforms[0].header.frame_id.c_str());
 			break;
 		}
 

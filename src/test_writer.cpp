@@ -17,6 +17,7 @@
 #include <boost/interprocess/containers/vector.hpp>
 
 #include "std_msgs/String.h"
+#include "tf2_msgs/TFMessage.h"
 
 extern "C" 
 {
@@ -25,6 +26,16 @@ extern "C"
 #include "kdbus-enum.h"
 
 }
+
+void dump_memory(char* data, size_t len)
+{
+    size_t i;
+    printf("Data in [%p..%p): ",data,data+len);
+    for (i=0;i<len;i++)
+        printf("%02X ", ((unsigned char*)data)[i] );
+    printf("\n");
+}
+
 
 int msg_send_dis(const struct conn *conn, const char *name, uint64_t cookie, uint64_t dst_id);
 
@@ -65,20 +76,41 @@ int msg_send(const struct conn *conn,
 			return EXIT_FAILURE;
 		}
 
-		std_msgs::String_<ros::allocator<void> > msg_pub;
-		msg_pub.data = "Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdkfohdkhopdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdkhop";
+		memset(address_fd, 0xAA, 1000);
+
+//		std_msgs::String_<ros::allocator<void> > msg_pub;
+//		msg_pub.data = "0Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
+
+		tf2_msgs::TFMessage_<ros::allocator<void> > msg_pub;
+		msg_pub.transforms.resize(3);
+//		msg_pub.transforms[0].header.frame_id = "Foo1";
+//		msg_pub.transforms[1].header.frame_id = "Foo2";
+//		msg_pub.transforms[2].header.frame_id = "Foo3";
+		msg_pub.transforms[0].header.frame_id = "0Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
+		msg_pub.transforms[1].header.frame_id = "1Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
+		msg_pub.transforms[2].header.frame_id = "2Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
+		msg_pub.transforms[0].transform.translation.x = 05;
+		msg_pub.transforms[1].transform.translation.x = 15;
+		msg_pub.transforms[2].transform.translation.x = 25;
+
+//		printf("msg_pub.transforms.alloc()==msg_pub.transforms[0].header.frame_id.alloc(): %i\n", msg_pub.transforms.get_stored_allocator()==msg_pub.transforms[0].header.frame_id.get_allocator());
 
 		ros::allocator<void>* my_alloc = new(address_fd) ros::allocator<void>(address_fd+offset_alloc+offset_struct);
-		std_msgs::String_<ros::allocator<void> >* msg_kdbus = new(address_fd+offset_alloc) std_msgs::String_<ros::allocator<void> >(*my_alloc);
+		tf2_msgs::TFMessage_<ros::allocator<void> >* msg_kdbus = new(address_fd+offset_alloc) tf2_msgs::TFMessage_<ros::allocator<void> >(*my_alloc);
+//		std_msgs::String_<ros::allocator<void> >* msg_kdbus = new(address_fd+offset_alloc) std_msgs::String_<ros::allocator<void> >(*my_alloc);
 		*msg_kdbus = msg_pub;
 
-//		fprintf(stderr,"2: %p\n", address_fd);
-		//memcpy(address_fd, "test string", 12);
-		munmap(address_fd,1000);
+		msg_pub.transforms[0].header.frame_id = "000llo worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
+		msg_pub.transforms[1].header.frame_id = "111llo worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
+		msg_pub.transforms[2].header.frame_id = "222llo worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
 
-/*
-		if (write(memfd, "kdbus memfd 1234567", 19) != 19) {
-*/
+		printf("ROS: orig  size=%li\n", msg_pub.transforms.size());
+		printf("ROS: kdbus size=%li\n", msg_kdbus->transforms.size());
+		printf("some string %s\n", msg_kdbus->transforms[0].header.frame_id.c_str());
+
+		dump_memory(address_fd, 1000);
+
+		munmap(address_fd,1000);
 
 		ret = ioctl(memfd, KDBUS_CMD_MEMFD_SEAL_SET, true);
 		if (ret < 0) {
