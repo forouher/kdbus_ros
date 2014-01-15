@@ -15,22 +15,22 @@ struct inner {
     typedef boost::container::basic_string<char, std::char_traits< char >,AllocS > MyString;
 
     typedef boost::interprocess::allocator< MyString, boost::interprocess::managed_shared_memory::segment_manager>  AllocV;
-    typedef boost::container::scoped_allocator_adaptor< AllocV> AllocScoped;
+    typedef boost::container::scoped_allocator_adaptor<AllocV> AllocScoped;
     typedef boost::container::vector<MyString, AllocScoped> MyVector;
 
     inner(const AllocScoped& alloc)
-	: s(alloc)
+	: vi(alloc)
     { }
 
-    MyString s;
+    MyVector vi;
 };
 
 // msg_outer
 struct outer {
 
-    typedef boost::interprocess::allocator< inner::MyVector, boost::interprocess::managed_shared_memory::segment_manager>  AllocV;
-    typedef boost::container::scoped_allocator_adaptor< AllocV> AllocScoped;
-    typedef boost::container::vector<inner::MyVector, AllocScoped> MyVectorV;
+    typedef boost::interprocess::allocator< inner, boost::interprocess::managed_shared_memory::segment_manager>  AllocV;
+    typedef boost::container::scoped_allocator_adaptor<AllocV> AllocScoped;
+    typedef boost::container::vector<inner, AllocScoped> MyVectorV;
 
     outer(const AllocScoped& alloc)
 	: v(alloc)
@@ -41,6 +41,13 @@ struct outer {
 };
 
 }
+
+//namespace boost {
+//namespace container {
+//struct constructible_with_allocator_suffix<msgs_test::inner> : ::boost::true_type { };
+//}
+//}
+
 
 //Main function. For parent process argc == 1, for child process argc == 2
 int main(int argc, char *argv[])
@@ -57,31 +64,35 @@ int main(int argc, char *argv[])
       boost::interprocess::managed_shared_memory segment(boost::interprocess::create_only, "MySharedMemory", 65536);
 
       //Initialize shared memory STL-compatible allocator
-      const msgs_test::outer::AllocScoped alloc_inst (segment.get_segment_manager());
+      msgs_test::outer::AllocScoped alloc_inst (segment.get_segment_manager());
 
-      //Construct a vector named "MyVector" in shared memory with argument alloc_inst
-      msgs_test::outer *myvector = segment.construct<msgs_test::outer>("MyVector")(alloc_inst);
+      //Construct a vector named "msg" in shared memory with argument alloc_inst
+      msgs_test::outer *msg = segment.construct<msgs_test::outer>("MyVector")(alloc_inst);
 
       const char* test = "oierwuiofjoihedfsjfigjisjijiogfiieejiogvejiogfejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
+      const char* testvi = "11111111111111111111111111111111111111111ejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
 
       msgs_test::inner foo(alloc_inst);
       msgs_test::inner foo2(alloc_inst);
-      foo.s = test;
+      foo.vi.resize(1);
+      foo.vi[0] = testvi;
       foo2 = foo;
 
       msgs_test::outer bar(alloc_inst);
       msgs_test::outer bar2(alloc_inst);
       bar2 = bar;
 
-      myvector->v.resize(1);
-      myvector->v.at(0).resize(5);
+      //msg->v.resize(1); // KAPUTT
+      msg->v.push_back(foo); // OK
+      msg->v[0] = foo2;
+      msg->v.at(0).vi.resize(5);
       for(int i = 0; i < 5; ++i)  //Insert data in the vector
-	myvector->v[0][i] = test;
+	msg->v[0].vi[i] = test;
 
       for(int i = 0; i < 10; ++i)  //Insert data in the vector
-         myvector->v[0].push_back(msgs_test::inner::MyString(test, alloc_inst));
+         msg->v[0].vi.push_back(msgs_test::inner::MyString(test, alloc_inst));
 
-      myvector->v[0].push_back(foo.s);
+      msg->v[0].vi.push_back(foo.vi[0]);
 
       //Launch child process
       std::string s(argv[0]); s += " child ";
@@ -97,13 +108,10 @@ int main(int argc, char *argv[])
       boost::interprocess::managed_shared_memory segment(boost::interprocess::open_only, "MySharedMemory");
 
       //Find the vector using the c-string name
-      msgs_test::outer *myvector = segment.find<msgs_test::outer>("MyVector").first;
+      msgs_test::outer *msg = segment.find<msgs_test::outer>("MyVector").first;
 
-      for(int i = 0; i < myvector->v.at(0).size(); ++i)  //Insert data in the vector
-          printf("%i: got string: ->%s<-\n",i, myvector->v.at(0).at(i).c_str());
-
-      //Use vector in reverse order
-      //std::sort(myvector->rbegin(), myvector->rend());
+      for(int i = 0; i < msg->v.at(0).vi.size(); ++i)  //Insert data in the vector
+          printf("%i: got string: ->%s<-\n",i, msg->v.at(0).vi.at(i).c_str());
 
       //When done, destroy the vector from the segment
       segment.destroy<msgs_test::outer>("MyVector");
