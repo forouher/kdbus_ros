@@ -9,59 +9,65 @@
 // msg_inner
 namespace msgs_test {
 
-struct inner {
+template <class ContainerAllocator>
+struct inner_ {
 
     // this is used by magic outside. not sure how
-    typedef boost::interprocess::allocator< char, boost::interprocess::managed_shared_memory::segment_manager>  allocator_type;
+    typedef ContainerAllocator allocator_type;
 
-    typedef boost::interprocess::allocator< char, boost::interprocess::managed_shared_memory::segment_manager>  AllocS;
-    typedef boost::container::basic_string<char, std::char_traits< char >,AllocS > MyString;
-
-    typedef boost::interprocess::allocator< MyString, boost::interprocess::managed_shared_memory::segment_manager>  AllocV;
-    typedef boost::container::scoped_allocator_adaptor<AllocV> AllocScoped;
-    typedef boost::container::vector<MyString, AllocScoped> MyVector;
-
-    inner(const AllocScoped& alloc)
-	: vi(alloc), s(alloc)
-    { }
-
-    inner(const inner& i, const AllocScoped& alloc)
-	: vi(i.vi, alloc), s(i.s, alloc)
-    { }
-
-    MyVector vi;
-
+    typedef boost::container::basic_string<char, std::char_traits< char >, typename ContainerAllocator::template rebind<char>::other > MyString;
     MyString s;
+
+    typedef boost::container::scoped_allocator_adaptor<typename ContainerAllocator::template rebind<MyString>::other> AllocScoped;
+    typedef boost::container::vector<MyString, AllocScoped> MyVector;
+    MyVector vi;
 
     int i;
     float f;
 
+    inner_(const ContainerAllocator& alloc)
+	: vi(alloc), s(alloc)
+    { }
+
+    inner_(const inner_& i, const ContainerAllocator& alloc)
+	: vi(i.vi, alloc), s(i.s, alloc)
+    { }
+
 };
 
+typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > inner;
+
+
 // msg_outer
-struct outer {
+template <class ContainerAllocator>
+struct outer_ {
 
     // this is used by magic outside. not sure how
-    typedef boost::interprocess::allocator< char, boost::interprocess::managed_shared_memory::segment_manager>  allocator_type;
+    typedef ContainerAllocator allocator_type;
 
-    typedef boost::interprocess::allocator< inner, boost::interprocess::managed_shared_memory::segment_manager>  AllocV;
-    typedef boost::container::scoped_allocator_adaptor<AllocV> AllocScoped;
+    typedef boost::container::scoped_allocator_adaptor<typename ContainerAllocator::template rebind<inner>::other> AllocScoped;
     typedef boost::container::vector<inner, AllocScoped> MyVectorV;
-
-    outer(const AllocScoped& alloc)
-	: v(alloc), v2(alloc)
-    { }
-
-    outer(const outer& o, const AllocScoped& alloc)
-	: v(o.v, alloc), v2(o.v, alloc)
-    { }
     MyVectorV v;
     MyVectorV v2;
 
     int i;
     float f;
 
+    outer_(const ContainerAllocator& alloc)
+	: v(alloc), v2(alloc)
+    { }
+
+    outer_(const outer_& o, const ContainerAllocator& alloc)
+	: v(o.v, alloc), v2(o.v, alloc)
+    { }
+
 };
+
+// ros::segment_manager (base class)
+// ros::simple_segment_manager : ros::segment_manager (behaves like std::allocator)
+// ros::kdbus_segment_manager : ros::segment_manager (stores in kdbus fd)
+
+typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > outer;
 
 }
 
