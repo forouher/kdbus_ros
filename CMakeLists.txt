@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(kdbus_tests)
 
 #add_definitions(-std=c1)
-#SET(CMAKE_CXX_FLAGS "-std=std99")
+#SET(CMAKE_CXX_FLAGS "-std=c++0x")
 SET(CMAKE_C_FLAGS "-std=gnu99")
 
 ## Find catkin macros and libraries

@@ -6,23 +6,17 @@
 #include <string>
 #include <cstdlib> //std::system
 
-//using namespace boost::container;
-//using namespace boost::interprocess;
-
-
-//Define an STL compatible allocator of ints that allocates from the managed_shared_memory.
-//This allocator will allow placing containers in the segment
 typedef boost::interprocess::allocator< char, boost::interprocess::managed_shared_memory::segment_manager>  ShmemAllocatorS;
 typedef boost::container::basic_string<char, std::char_traits< char >,ShmemAllocatorS > MyString;
+
 typedef boost::interprocess::allocator< MyString, boost::interprocess::managed_shared_memory::segment_manager>  ShmemAllocatorV;
+typedef boost::container::scoped_allocator_adaptor< ShmemAllocatorV> ShmemAllocatorScopedV;
+typedef boost::container::vector<MyString, ShmemAllocatorScopedV> MyVector;
 
-//typedef boost::container::scoped_allocator_adaptor< ShmemAllocatorV, ShmemAllocatorS > ShmemAllocatorScoped;
-typedef boost::container::scoped_allocator_adaptor< ShmemAllocatorV > ShmemAllocatorScoped;
-//typedef ShmemAllocatorV ShmemAllocatorScoped;
-
-//Alias a vector that uses the previous STL-like allocator so that allocates
-//its values from the segment
-typedef boost::container::vector<MyString, ShmemAllocatorScoped> MyVector;
+typedef boost::interprocess::allocator< MyVector, boost::interprocess::managed_shared_memory::segment_manager>  ShmemAllocatorVV;
+typedef boost::container::scoped_allocator_adaptor< ShmemAllocatorVV> ShmemAllocatorScopedVV;
+//typedef boost::container::scoped_allocator_adaptor< ShmemAllocatorVV, ShmemAllocatorV> ShmemAllocatorScopedVV;
+typedef boost::container::vector<MyVector, ShmemAllocatorScopedVV> MyVectorV;
 
 namespace boost {
 namespace container {
@@ -52,20 +46,21 @@ int main(int argc, char *argv[])
       boost::interprocess::managed_shared_memory segment(boost::interprocess::create_only, "MySharedMemory", 65536);
 
       //Initialize shared memory STL-compatible allocator
-      const ShmemAllocatorScoped alloc_inst (segment.get_segment_manager());
+      const ShmemAllocatorScopedVV alloc_inst (segment.get_segment_manager());
 
       //Construct a vector named "MyVector" in shared memory with argument alloc_inst
-      MyVector *myvector = segment.construct<MyVector>("MyVector")(alloc_inst);
+      MyVectorV *myvector = segment.construct<MyVectorV>("MyVector")(alloc_inst);
 
       const char* test = "oierwuiofjoihedfsjfigjisjijiogfiieejiogvejiogfejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
       //MyString test2 = test;
 
-      myvector->resize(5);
+      myvector->resize(1);
+      myvector->at(0).resize(5);
       for(int i = 0; i < 5; ++i)  //Insert data in the vector
-	(*myvector)[i] = test;
+	(*myvector)[0][i] = test;
 
       for(int i = 0; i < 10; ++i)  //Insert data in the vector
-         myvector->push_back(MyString(test, alloc_inst));
+         (*myvector)[0].push_back(MyString(test, alloc_inst));
 
       //Launch child process
       std::string s(argv[0]); s += " child ";
@@ -81,10 +76,10 @@ int main(int argc, char *argv[])
       boost::interprocess::managed_shared_memory segment(boost::interprocess::open_only, "MySharedMemory");
 
       //Find the vector using the c-string name
-      MyVector *myvector = segment.find<MyVector>("MyVector").first;
+      MyVectorV *myvector = segment.find<MyVectorV>("MyVector").first;
 
-      for(int i = 0; i < myvector->size(); ++i)  //Insert data in the vector
-          printf("%i: got string: ->%s<-\n",i, myvector->at(i).c_str());
+      for(int i = 0; i < myvector->at(0).size(); ++i)  //Insert data in the vector
+          printf("%i: got string: ->%s<-\n",i, myvector->at(0).at(i).c_str());
 
       //Use vector in reverse order
       //std::sort(myvector->rbegin(), myvector->rend());
