@@ -68,7 +68,15 @@ int main(int argc, char *argv[])
       msgs_test::inner foo(alloc_inst);
       foo.s = test;
 
+      msgs_test::inner foo2(alloc_inst);
+      foo2 = foo;
+
+
       msgs_test::outer bar(alloc_inst);
+
+      msgs_test::outer bar2(alloc_inst);
+
+      bar2 = bar;
 
       myvector->resize(1);
       myvector->at(0).resize(5);
