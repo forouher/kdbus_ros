@@ -6,6 +6,49 @@
 #include <string>
 #include <cstdlib> //std::system
 
+namespace foobar{
+
+typedef boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager>  ShmemAllocatorVoid;
+
+template <class ContainerAllocator>
+struct Header_
+{
+
+  Header_()
+    : frameid()  {
+    }
+  Header_(const ContainerAllocator& _alloc)
+    : frameid(_alloc)  {
+    }
+
+    typedef boost::container::basic_string< char, std::char_traits<char>, typename ContainerAllocator::template rebind<char>::other >  _frameid_type;
+    _frameid_type frameid;
+    int foo;
+};
+
+
+template <class ContainerAllocator>
+struct TFMessage_
+{
+
+  TFMessage_()
+    : transforms()  {
+    }
+  TFMessage_(const ContainerAllocator& _alloc)
+    : transforms(_alloc)  {
+    }
+
+    typedef boost::container::vector< Header_<ContainerAllocator> , typename ContainerAllocator::template rebind< Header_<ContainerAllocator> >::other >  _transforms_type;
+    _transforms_type transforms;
+};
+
+
+}
+//namespace codefoo {
+
+// basic_string
+typedef foobar::Header_<foobar::ShmemAllocatorVoid> Header;
+typedef foobar::TFMessage_<foobar::ShmemAllocatorVoid> TFMessage;
 typedef boost::interprocess::allocator< char, boost::interprocess::managed_shared_memory::segment_manager>  ShmemAllocatorS;
 typedef boost::container::basic_string<char, std::char_traits< char >,ShmemAllocatorS > MyString;
 
@@ -15,11 +58,10 @@ typedef boost::container::vector<MyString, ShmemAllocatorScopedV> MyVector;
 
 typedef boost::interprocess::allocator< MyVector, boost::interprocess::managed_shared_memory::segment_manager>  ShmemAllocatorVV;
 typedef boost::container::scoped_allocator_adaptor< ShmemAllocatorVV> ShmemAllocatorScopedVV;
-//typedef boost::container::scoped_allocator_adaptor< ShmemAllocatorVV, ShmemAllocatorV> ShmemAllocatorScopedVV;
 typedef boost::container::vector<MyVector, ShmemAllocatorScopedVV> MyVectorV;
 
-namespace boost {
-namespace container {
+//namespace boost {
+//namespace container {
 
 //template <class T, class Allocator >
 //struct constructible_with_allocator_suffix<basic_string<T,std::char_traits< T >, Allocator> > : ::boost::true_type { };
@@ -28,8 +70,10 @@ namespace container {
 ////template <class T, class Allocator = boost::interprocess::allocator<T, boost::interprocess::managed_shared_memory::segment_manager> >
 //struct constructible_with_allocator_suffix<vector<T,Allocator> > : ::boost::true_type { };
 
-}
-}
+//}
+//}
+
+//}
 
 //Main function. For parent process argc == 1, for child process argc == 2
 int main(int argc, char *argv[])
@@ -49,26 +93,29 @@ int main(int argc, char *argv[])
       const ShmemAllocatorScopedVV alloc_inst (segment.get_segment_manager());
 
       //Construct a vector named "MyVector" in shared memory with argument alloc_inst
-      MyVectorV *myvector = segment.construct<MyVectorV>("MyVector")(alloc_inst);
+      Header *header = segment.construct<Header>("MyVector")(alloc_inst);
 
       const char* test = "oierwuiofjoihedfsjfigjisjijiogfiieejiogvejiogfejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
       //MyString test2 = test;
 
-      myvector->resize(1);
+    header->frameid = test;
+    header->foo = 42;
+
+/*      myvector->resize(1);
       myvector->at(0).resize(5);
       for(int i = 0; i < 5; ++i)  //Insert data in the vector
 	(*myvector)[0][i] = test;
 
       for(int i = 0; i < 10; ++i)  //Insert data in the vector
          (*myvector)[0].push_back(MyString(test, alloc_inst));
-
+*/
       //Launch child process
       std::string s(argv[0]); s += " child ";
       if(0 != std::system(s.c_str()))
          return 1;
 
       //Check child has destroyed the vector
-      if(segment.find<MyVector>("MyVector").first)
+      if(segment.find<Header>("MyVector").first)
          return 1;
    }
    else{ //Child process
@@ -76,17 +123,17 @@ int main(int argc, char *argv[])
       boost::interprocess::managed_shared_memory segment(boost::interprocess::open_only, "MySharedMemory");
 
       //Find the vector using the c-string name
-      MyVectorV *myvector = segment.find<MyVectorV>("MyVector").first;
+      Header *header = segment.find<Header>("MyVector").first;
 
-      for(int i = 0; i < myvector->at(0).size(); ++i)  //Insert data in the vector
-          printf("%i: got string: ->%s<-\n",i, myvector->at(0).at(i).c_str());
+      printf("foo=%i, frameid=%s\n", header->foo, header->frameid.c_str());
 
       //Use vector in reverse order
       //std::sort(myvector->rbegin(), myvector->rend());
 
       //When done, destroy the vector from the segment
-      segment.destroy<MyVector>("MyVector");
+      segment.destroy<Header>("MyVector");
    }
 
    return 0;
 };
+
