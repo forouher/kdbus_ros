@@ -60,33 +60,28 @@ int main(int argc, char *argv[])
       const msgs_test::outer::AllocScoped alloc_inst (segment.get_segment_manager());
 
       //Construct a vector named "MyVector" in shared memory with argument alloc_inst
-      msgs_test::outer::MyVectorV *myvector = segment.construct<msgs_test::outer::MyVectorV>("MyVector")(alloc_inst);
+      msgs_test::outer *myvector = segment.construct<msgs_test::outer>("MyVector")(alloc_inst);
 
       const char* test = "oierwuiofjoihedfsjfigjisjijiogfiieejiogvejiogfejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
-      //MyString test2 = test;
 
       msgs_test::inner foo(alloc_inst);
-      foo.s = test;
-
       msgs_test::inner foo2(alloc_inst);
+      foo.s = test;
       foo2 = foo;
 
-
       msgs_test::outer bar(alloc_inst);
-
       msgs_test::outer bar2(alloc_inst);
-
       bar2 = bar;
 
-      myvector->resize(1);
-      myvector->at(0).resize(5);
+      myvector->v.resize(1);
+      myvector->v.at(0).resize(5);
       for(int i = 0; i < 5; ++i)  //Insert data in the vector
-	(*myvector)[0][i] = test;
+	myvector->v[0][i] = test;
 
       for(int i = 0; i < 10; ++i)  //Insert data in the vector
-         (*myvector)[0].push_back(msgs_test::inner::MyString(test, alloc_inst));
+         myvector->v[0].push_back(msgs_test::inner::MyString(test, alloc_inst));
 
-      (*myvector)[0].push_back(foo.s);
+      myvector->v[0].push_back(foo.s);
 
       //Launch child process
       std::string s(argv[0]); s += " child ";
@@ -94,7 +89,7 @@ int main(int argc, char *argv[])
          return 1;
 
       //Check child has destroyed the vector
-      if(segment.find<msgs_test::outer::MyVectorV>("MyVector").first)
+      if(segment.find<msgs_test::outer>("MyVector").first)
          return 1;
    }
    else{ //Child process
@@ -102,16 +97,16 @@ int main(int argc, char *argv[])
       boost::interprocess::managed_shared_memory segment(boost::interprocess::open_only, "MySharedMemory");
 
       //Find the vector using the c-string name
-      msgs_test::outer::MyVectorV *myvector = segment.find<msgs_test::outer::MyVectorV>("MyVector").first;
+      msgs_test::outer *myvector = segment.find<msgs_test::outer>("MyVector").first;
 
-      for(int i = 0; i < myvector->at(0).size(); ++i)  //Insert data in the vector
-          printf("%i: got string: ->%s<-\n",i, myvector->at(0).at(i).c_str());
+      for(int i = 0; i < myvector->v.at(0).size(); ++i)  //Insert data in the vector
+          printf("%i: got string: ->%s<-\n",i, myvector->v.at(0).at(i).c_str());
 
       //Use vector in reverse order
       //std::sort(myvector->rbegin(), myvector->rend());
 
       //When done, destroy the vector from the segment
-      segment.destroy<msgs_test::outer::MyVectorV>("MyVector");
+      segment.destroy<msgs_test::outer>("MyVector");
    }
 
    return 0;
