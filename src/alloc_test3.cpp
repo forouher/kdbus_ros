@@ -11,6 +11,9 @@ namespace msgs_test {
 
 struct inner {
 
+    // this is used by magic outside. not sure how
+    typedef boost::interprocess::allocator< char, boost::interprocess::managed_shared_memory::segment_manager>  allocator_type;
+
     typedef boost::interprocess::allocator< char, boost::interprocess::managed_shared_memory::segment_manager>  AllocS;
     typedef boost::container::basic_string<char, std::char_traits< char >,AllocS > MyString;
 
@@ -22,11 +25,18 @@ struct inner {
 	: vi(alloc)
     { }
 
+    inner(const inner& i, const AllocScoped& alloc)
+	: vi(i.vi, alloc)
+    { }
+
     MyVector vi;
 };
 
 // msg_outer
 struct outer {
+
+    // this is used by magic outside. not sure how
+    typedef boost::interprocess::allocator< char, boost::interprocess::managed_shared_memory::segment_manager>  allocator_type;
 
     typedef boost::interprocess::allocator< inner, boost::interprocess::managed_shared_memory::segment_manager>  AllocV;
     typedef boost::container::scoped_allocator_adaptor<AllocV> AllocScoped;
@@ -36,18 +46,14 @@ struct outer {
 	: v(alloc)
     { }
 
+    outer(const outer& o, const AllocScoped& alloc)
+	: v(o.v, alloc)
+    { }
     MyVectorV v;
 
 };
 
 }
-
-//namespace boost {
-//namespace container {
-//struct constructible_with_allocator_suffix<msgs_test::inner> : ::boost::true_type { };
-//}
-//}
-
 
 //Main function. For parent process argc == 1, for child process argc == 2
 int main(int argc, char *argv[])
@@ -82,8 +88,7 @@ int main(int argc, char *argv[])
       msgs_test::outer bar2(alloc_inst);
       bar2 = bar;
 
-      //msg->v.resize(1); // KAPUTT
-      msg->v.push_back(foo); // OK
+      msg->v.resize(1);
       msg->v[0] = foo2;
       msg->v.at(0).vi.resize(5);
       for(int i = 0; i < 5; ++i)  //Insert data in the vector
