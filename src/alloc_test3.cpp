@@ -22,14 +22,20 @@ struct inner {
     typedef boost::container::vector<MyString, AllocScoped> MyVector;
 
     inner(const AllocScoped& alloc)
-	: vi(alloc)
+	: vi(alloc), s(alloc)
     { }
 
     inner(const inner& i, const AllocScoped& alloc)
-	: vi(i.vi, alloc)
+	: vi(i.vi, alloc), s(i.s, alloc)
     { }
 
     MyVector vi;
+
+    MyString s;
+
+    int i;
+    float f;
+
 };
 
 // msg_outer
@@ -43,13 +49,17 @@ struct outer {
     typedef boost::container::vector<inner, AllocScoped> MyVectorV;
 
     outer(const AllocScoped& alloc)
-	: v(alloc)
+	: v(alloc), v2(alloc)
     { }
 
     outer(const outer& o, const AllocScoped& alloc)
-	: v(o.v, alloc)
+	: v(o.v, alloc), v2(o.v, alloc)
     { }
     MyVectorV v;
+    MyVectorV v2;
+
+    int i;
+    float f;
 
 };
 
