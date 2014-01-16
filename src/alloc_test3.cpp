@@ -1,10 +1,13 @@
 #include <boost/interprocess/managed_shared_memory.hpp>
+#include <boost/interprocess/managed_external_buffer.hpp>
 #include <boost/container/vector.hpp>
 #include <boost/container/string.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/container/scoped_allocator.hpp>
 #include <string>
 #include <cstdlib> //std::system
+#include "kdbus_mapping.hpp"
+#include "managed_memfd_file.hpp"
 
 // msg_inner
 namespace msgs_test {
@@ -35,7 +38,9 @@ struct inner_ {
 
 };
 
-typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > inner;
+//typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_memfd_memory> > inner;
+//typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > inner;
+typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > inner;
 
 
 // msg_outer
@@ -67,7 +72,9 @@ struct outer_ {
 // ros::simple_segment_manager : ros::segment_manager (behaves like std::allocator)
 // ros::kdbus_segment_manager : ros::segment_manager (stores in kdbus fd)
 
-typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > outer;
+//typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_memfd_memory> > outer;
+typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > outer;
+//typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > outer;
 
 }
 
@@ -82,8 +89,22 @@ int main(int argc, char *argv[])
          ~shm_remove(){ boost::interprocess::shared_memory_object::remove("MySharedMemory"); }
       } remover;
 
+//      int fd = 45;
+//      boost::interprocess::kdbus_mapping m_file(fd, boost::interprocess::read_write);
+//      mapped_region region(m_file, read_write);
+
+//      boost::interprocess::managed_memfd_file segment(boost::interprocess::create_only,"./demo.db", 50ul<<20); // "50Gb ought to be enough for anyone"
+//      msgs_test::outer::AllocScoped alloc_inst (segment.get_segment_manager());
+//      msgs_test::outer *msg3 = segment.construct<msgs_test::outer>("MyVector")(alloc_inst);
+
+      char* buffer[65536];
+
       //Create a new segment with given name and size
-      boost::interprocess::managed_shared_memory segment(boost::interprocess::create_only, "MySharedMemory", 65536);
+      boost::interprocess::managed_shared_memory segment2(boost::interprocess::create_only, "MySharedMemory", 65536);
+      boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, buffer, 65536);
+
+//      boost::interprocess::managed_memfd_memory segment(fd, 65536);
+      //msgs_test::outer::AllocScoped alloc_inst (&segment);
 
       //Initialize shared memory STL-compatible allocator
       msgs_test::outer::AllocScoped alloc_inst (segment.get_segment_manager());
@@ -127,12 +148,13 @@ int main(int argc, char *argv[])
    else{ //Child process
       //Open the managed segment
       boost::interprocess::managed_shared_memory segment(boost::interprocess::open_only, "MySharedMemory");
+//      boost::interprocess::managed_memfd_file segment(boost::interprocess::open_only,"./demo.db"); // "50Gb ought to be enough for anyone"
 
       //Find the vector using the c-string name
-      msgs_test::outer *msg = segment.find<msgs_test::outer>("MyVector").first;
+//      msgs_test::outer *msg = segment.find<msgs_test::outer>("MyVector").first;
 
-      for(int i = 0; i < msg->v.at(0).vi.size(); ++i)  //Insert data in the vector
-          printf("%i: got string: ->%s<-\n",i, msg->v.at(0).vi.at(i).c_str());
+//      for(int i = 0; i < msg->v.at(0).vi.size(); ++i)  //Insert data in the vector
+//          printf("%i: got string: ->%s<-\n",i, msg->v.at(0).vi.at(i).c_str());
 
       //When done, destroy the vector from the segment
       segment.destroy<msgs_test::outer>("MyVector");
