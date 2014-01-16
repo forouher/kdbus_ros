@@ -60,7 +60,7 @@ struct inner_ {
     int i;
     float f;
 
-    inner_(const ContainerAllocator& alloc)
+    explicit inner_(const ContainerAllocator& alloc)
 	: vi(alloc), s(alloc)
     { }
 
