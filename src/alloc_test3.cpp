@@ -6,8 +6,9 @@
 #include <boost/container/scoped_allocator.hpp>
 #include <string>
 #include <cstdlib> //std::system
-#include "kdbus_mapping.hpp"
-#include "managed_memfd_file.hpp"
+//#include "kdbus_mapping.hpp"
+//#include "managed_memfd_file.hpp"
+#include "allocator.hpp"
 
 
 #include <boost/interprocess/containers/string.hpp>
@@ -60,11 +61,11 @@ struct inner_ {
     int i;
     float f;
 
-    explicit inner_(const ContainerAllocator& alloc)
+    explicit inner_(const ContainerAllocator& alloc = allocator_type())
 	: vi(alloc), s(alloc)
     { }
 
-    inner_(const inner_& i, const ContainerAllocator& alloc)
+    inner_(const inner_& i, const ContainerAllocator& alloc = allocator_type())
 	: vi(i.vi, alloc), s(i.s, alloc)
     { }
 
@@ -72,7 +73,7 @@ struct inner_ {
 
 //typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_memfd_memory> > inner;
 //typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > inner;
-typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > inner;
+typedef ::msgs_test::inner_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > inner;
 
 
 // msg_outer
@@ -90,11 +91,11 @@ struct outer_ {
     int i;
     float f;
 
-    outer_(const ContainerAllocator& alloc)
+    outer_(const ContainerAllocator& alloc = allocator_type())
 	: v(alloc), v2(alloc)
     { }
 
-    outer_(const outer_& o, const ContainerAllocator& alloc)
+    outer_(const outer_& o, const ContainerAllocator& alloc = allocator_type())
 	: v(o.v, alloc), v2(o.v, alloc)
     { }
 
@@ -105,7 +106,7 @@ struct outer_ {
 // ros::kdbus_segment_manager : ros::segment_manager (stores in kdbus fd)
 
 //typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_memfd_memory> > outer;
-typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > outer;
+typedef ::msgs_test::outer_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > outer;
 //typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > outer;
 
 }
@@ -182,14 +183,14 @@ int msg_send(const struct conn *conn,
       const char* test = "oierwuiofjoihedfsjfigjisjijiogfiieejiogvejiogfejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
       const char* testvi = "11111111111111111111111111111111111111111ejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
 
-      msgs_test::inner foo(alloc_inst);
-      msgs_test::inner foo2(alloc_inst);
+      msgs_test::inner foo;
+      msgs_test::inner foo2;
       foo.vi.resize(1);
       foo.vi[0] = testvi;
       foo2 = foo;
 
-      msgs_test::outer bar(alloc_inst);
-      msgs_test::outer bar2(alloc_inst);
+      msgs_test::outer bar;
+      msgs_test::outer bar2;
       bar2 = bar;
 
       msg->v.resize(1);
