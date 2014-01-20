@@ -39,6 +39,7 @@ extern "C"
 #include "std_msgs/String.h"
 #include "tf2_msgs/TFMessage.h"
 #include "ros/allocator.h"
+#include "ros/boost_container.h"
 
 #define KBUILD_MODNAME "kdbus"
 
@@ -167,7 +168,6 @@ int msg_send(const struct conn *conn,
 
 		memset(address_fd, 0xAA, memfd_size);
 
-      {
 		fprintf(stderr,"2\n");
       //Create a new segment with given name and size
       boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, address_fd, memfd_size);
@@ -178,13 +178,22 @@ int msg_send(const struct conn *conn,
 		fprintf(stderr,"4\n");
 
       //Construct a vector named "msg" in shared memory with argument alloc_inst
-      msgs_test::outer *msg = segment.construct<msgs_test::outer>("MyVector")(alloc_inst);
+      typedef std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > MyMsg;
+      MyMsg *msg = segment.construct<MyMsg>("MyVector")(alloc_inst);
 		fprintf(stderr,"5\n");
 
       const char* test = "oierwuiofjoihedfsjfigjisjijiogfiieejiogvejiogfejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
       const char* testvi = "11111111111111111111111111111111111111111ejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
 
-      msgs_test::inner foo;
+//	std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > test123;
+//	tf2_msgs::TFMessage_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > test33;
+
+	MyMsg src;
+	src.data = "foo211111111111111111111111111111111111111111111111111111111";
+
+	*msg = src;
+
+/*      msgs_test::inner foo;
       msgs_test::inner foo2;
       foo.vi.resize(1);
       foo.vi[0] = testvi;
@@ -206,7 +215,7 @@ int msg_send(const struct conn *conn,
       msg->v[0].vi.push_back(foo.vi[0]);
 		fprintf(stderr,"6\n");
 	}
-/*
+*//*
 //		std_msgs::String_<ros::allocator<void> > msg_pub;
 //		msg_pub.data = "0Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
 
@@ -403,17 +412,17 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 			dump_memory(buf, 1000);
 
 			size_t offset_alloc = sizeof(ros::allocator<void>);
-			//std_msgs::String_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<std_msgs::String_<ros::allocator<void> >* >(buf+offset_alloc);
-//			const std_msgs::String_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<const std_msgs::String_<ros::allocator<void> >* >(buf+offset_alloc);
 			const tf2_msgs::TFMessage_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<const tf2_msgs::TFMessage_<ros::allocator<void> >* >(buf+offset_alloc);
 
 		      boost::interprocess::managed_external_buffer segment(boost::interprocess::open_only, buf, 200000); // "50Gb ought to be enough for anyone"
 
 		      //Find the vector using the c-string name
-    		       msgs_test::outer *msg = segment.find<msgs_test::outer>("MyVector").first;
+		      typedef std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > MyMsg;
+    		       MyMsg *msg = segment.find<MyMsg>("MyVector").first;
 
-			for(int i = 0; i < msg->v.at(0).vi.size(); ++i)  //Insert data in the vector
-		          printf("%i: got string: ->%s<-\n",i, msg->v.at(0).vi.at(i).c_str());
+		          printf("%i: got string: ->%s<-\n",0, msg->data.c_str());
+//			for(int i = 0; i < msg->v.at(0).vi.size(); ++i)  //Insert data in the vector
+//		          printf("%i: got string: ->%s<-\n",i, msg->v.at(0).vi.at(i).c_str());
 
 
 //			printf("ROS: tf0=%lf  tf1=%lf tf2=%lf \n",  msg_kdbus2->transforms[0].transform.translation.x,  msg_kdbus2->transforms[1].transform.translation.x,  msg_kdbus2->transforms[2].transform.translation.x);

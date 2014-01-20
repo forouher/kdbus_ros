@@ -10,33 +10,33 @@ void dump_memory(char* data, size_t len)
     printf("\n");
 }
 
-size_t offset_alloc = sizeof(ros::allocator<void>);
-size_t offset_struct = sizeof(std_msgs::String_<ros::allocator<void> >);
+size_t offset_alloc = sizeof(boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager>);
+size_t offset_struct = sizeof(std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> >);
 
 void send(char* shmem) {
-    printf("sizeof(ros::allocator): %li\n", sizeof(ros::allocator<void>));
+    printf("sizeof(boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager>): %li\n", sizeof(boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager>));
 
 
     // user creates msg in own code
-    std_msgs::String_<ros::allocator<void> > msg_pub;
+    std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > msg_pub;
     //msg_pub.data = "Hello world";
-    msg_pub.data = "Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdkfohdkhopdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdkhop";
+//    msg_pub.data = "Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdkfohdkhopdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdkhop";
 
     printf("Sende -->%s<--\n", msg_pub.data.c_str());
 
     // message is then converted to kdbus-compatible object
-    ros::allocator<void>* my_alloc = new(shmem) ros::allocator<void>(shmem+offset_alloc+offset_struct);
-    std_msgs::String_<ros::allocator<void> >* msg_kdbus = new(shmem+offset_alloc) std_msgs::String_<ros::allocator<void> >(*my_alloc);
+    boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager>* my_alloc;// = new(shmem) boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager>(shmem+offset_alloc+offset_struct);
+    std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> >* msg_kdbus = new(shmem+offset_alloc) std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> >(*my_alloc);
     *msg_kdbus = msg_pub;
 
 }
 
 void receive(char* shmem2) {
 
-    std_msgs::String_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<std_msgs::String_<ros::allocator<void> >* >(shmem2+offset_alloc);
+    std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> >* msg_kdbus2 = reinterpret_cast<std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> >* >(shmem2+offset_alloc);
     
     // on subscriber, message is casted back to user-friendly msg 
-    std_msgs::String_<ros::allocator<void> > msg;
+    std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > msg;
     msg = *msg_kdbus2;
 
   printf("Empfangen -->%s<--\n", msg.data.c_str());
