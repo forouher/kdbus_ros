@@ -8,7 +8,7 @@
 #include <cstdlib> //std::system
 //#include "kdbus_mapping.hpp"
 //#include "managed_memfd_file.hpp"
-#include "allocator.hpp"
+//#include "allocator.hpp"
 
 
 #include <boost/interprocess/containers/string.hpp>
@@ -38,6 +38,7 @@ extern "C"
 
 #include "std_msgs/String.h"
 #include "tf2_msgs/TFMessage.h"
+#include "ros/allocator.h"
 
 #define KBUILD_MODNAME "kdbus"
 
