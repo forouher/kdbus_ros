@@ -1,20 +1,6 @@
-#include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/interprocess/managed_external_buffer.hpp>
-#include <boost/container/vector.hpp>
-#include <boost/container/string.hpp>
-#include <boost/interprocess/allocators/allocator.hpp>
-#include <boost/container/scoped_allocator.hpp>
 #include <string>
-#include <cstdlib> //std::system
-//#include "kdbus_mapping.hpp"
-//#include "managed_memfd_file.hpp"
-//#include "allocator.hpp"
+#include <cstdlib>
 
-
-#include <boost/interprocess/containers/string.hpp>
-#include <boost/interprocess/containers/vector.hpp>
-
-//#include "ros/ros.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -36,10 +22,9 @@ extern "C"
 #include "kdbus-enum.h"
 }
 
-//#include "std_msgs/String.h"
 #include "tf2_msgs/TFMessage.h"
-#include "ros/allocator.h"
-#include "ros/boost_container.h"
+
+#include <boost/interprocess/managed_external_buffer.hpp>
 
 #define KBUILD_MODNAME "kdbus"
 
@@ -71,7 +56,7 @@ int msg_send(const struct conn *conn,
 	//Create a new segment with given name and size
 	boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, address_fd, memfd_size);
 	tf2_msgs::TFMessage::allocator alloc (segment.get_segment_manager());
-	segment.construct<tf2_msgs::TFMessage>("MyVector")(m,alloc);
+	segment.construct<tf2_msgs::TFMessage>("DATA")(m,alloc);
 
 	munmap(address_fd,memfd_size);
 
@@ -165,12 +150,6 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 	uint64_t timeout = 0;
 	uint64_t cookie_reply = 0;
 
-/*
-	if (msg->flags & KDBUS_MSG_FLAGS_EXPECT_REPLY)
-		timeout = msg->timeout_ns;
-	else
-		cookie_reply = msg->cookie_reply;
-*/
 	KDBUS_ITEM_FOREACH(item, msg, items) {
 		if (item->size <= KDBUS_ITEM_HEADER_SIZE) {
 			printf("  +%s (%llu bytes) invalid data record\n", enum_MSG(item->type), item->size);
@@ -195,7 +174,7 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 			}
 
 		      boost::interprocess::managed_external_buffer segment(boost::interprocess::open_only, buf, 200000); // "50Gb ought to be enough for anyone"
-    		       tf2_msgs::TFMessage *msg = segment.find<tf2_msgs::TFMessage>("MyVector").first;
+    		       tf2_msgs::TFMessage *msg = segment.find<tf2_msgs::TFMessage>("DATA").first;
 
 		          printf("%i: size of array ->%lu<-\n",0, msg->transforms.size());
 		          printf("%i: got seq: ->%i<-\n",0, msg->transforms[0].header.seq);
@@ -250,7 +229,7 @@ int main(int argc, char *argv[])
 
 	int fdc, ret, cookie;
 	char *bus;
-	struct conn *conn_a, *conn_b;
+	struct conn *conn_b;
 	struct pollfd fds[2];
 	int count;
 	int r;
@@ -267,7 +246,7 @@ int main(int argc, char *argv[])
 	bus_make.bs.type = KDBUS_ITEM_BLOOM_SIZE;
 	bus_make.bs.bloom_size = 64;
 
-	snprintf(bus_make.name, sizeof(bus_make.name), "%u-topicY", getuid());
+	snprintf(bus_make.name, sizeof(bus_make.name), "%u-ros", getuid());
 	bus_make.n_type = KDBUS_ITEM_MAKE_NAME;
 	bus_make.n_size = KDBUS_ITEM_HEADER_SIZE + strlen(bus_make.name) + 1;
 
@@ -278,25 +257,15 @@ int main(int argc, char *argv[])
 	if (asprintf(&bus, "/dev/kdbus/%s/bus", bus_make.name) < 0)
 		return EXIT_FAILURE;
 
-	conn_a = connect_to_bus(bus, 0);
 	conn_b = connect_to_bus(bus, 0);
-	if (!conn_a || !conn_b)
+	if (!conn_b)
 		return EXIT_FAILURE;
 
-	r = upload_policy(conn_a->fd, "foo.bar2.test");
-	if (r < 0)
-		return EXIT_FAILURE;
-	r = upload_policy(conn_a->fd, "foo.bar2.baz");
+	r = upload_policy(conn_b->fd, "node_pub");
 	if (r < 0)
 		return EXIT_FAILURE;
 
-	r = name_acquire(conn_a, "foo.bar2.test", KDBUS_NAME_ALLOW_REPLACEMENT);
-	if (r < 0)
-		return EXIT_FAILURE;
-	r = name_acquire(conn_a, "foo.bar2.baz", 0);
-	if (r < 0)
-		return EXIT_FAILURE;
-	r = name_acquire(conn_b, "foo.bar2.baz", KDBUS_NAME_QUEUE);
+	r = name_acquire(conn_b, "node_pub", KDBUS_NAME_QUEUE);
 	if (r < 0)
 		return EXIT_FAILURE;
 
@@ -305,7 +274,6 @@ int main(int argc, char *argv[])
 			  KDBUS_NAME_LIST_QUEUED|
 			  KDBUS_NAME_LIST_ACTIVATORS);
 
-	add_match_empty(conn_a->fd);
 	add_match_empty(conn_b->fd);
 
 	cookie = 0;
@@ -319,11 +287,8 @@ int main(int argc, char *argv[])
 	msg_send(conn_b, NULL, 0xc0000000 | cookie, 1, tfm);
 
 	printf("-- closing bus connections\n");
-	close(conn_a->fd);
 	close(conn_b->fd);
-	free(conn_a);
 	free(conn_b);
-
 
 	printf("-- closing bus master\n");
 	close(fdc);
@@ -367,7 +332,7 @@ int main(int argc, char *argv[])
 	bus_make.bs.type = KDBUS_ITEM_BLOOM_SIZE;
 	bus_make.bs.bloom_size = 64;
 
-	snprintf(bus_make.name, sizeof(bus_make.name), "%u-topicY", getuid());
+	snprintf(bus_make.name, sizeof(bus_make.name), "%u-ros", getuid());
 	bus_make.n_type = KDBUS_ITEM_MAKE_NAME;
 	bus_make.n_size = KDBUS_ITEM_HEADER_SIZE + strlen(bus_make.name) + 1;
 
@@ -386,14 +351,13 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 
 	conn_a = connect_to_bus(bus, 0);
-	//conn_b = connect_to_bus(bus, 0);
 	if (!conn_a)
 		return EXIT_FAILURE;
 
-	r = upload_policy(conn_a->fd, "test_reader");
+	r = upload_policy(conn_a->fd, "node_sub");
 	if (r < 0)
 		return EXIT_FAILURE;
-	r = name_acquire(conn_a, "test_reader", 0);
+	r = name_acquire(conn_a, "node_sub", 0);
 	if (r < 0)
 		return EXIT_FAILURE;
 
@@ -416,7 +380,7 @@ int main(int argc, char *argv[])
 
 		if (fds[0].revents & POLLIN) {
 			if (count > 2)
-				name_release(conn_a, "test_reader");
+				name_release(conn_a, "node_sub");
 
 			msg_recv(conn_a);
 		}
