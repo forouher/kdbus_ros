@@ -44,15 +44,17 @@ include_directories(include
 )
 
 # Declare a cpp executable
-add_executable(talko src/talker.cpp)
-add_executable(alloc_test src/alloc_test.cpp)
-add_executable(alloc_test2 src/alloc_test2.cpp)
-add_executable(alloc_test3 src/alloc_test3.cpp src/kdbus-enum.c src/kdbus-util.c)
-add_executable(test_writer src/kdbus-enum.c src/kdbus-util.c src/test_writer.cpp)
-add_executable(test_reader src/kdbus-enum.c src/kdbus-util.c src/test_reader.cpp)
+#add_executable(talko src/talker.cpp)
+#add_executable(alloc_test src/alloc_test.cpp)
+#add_executable(alloc_test2 src/alloc_test2.cpp)
+#add_executable(alloc_test3 src/alloc_test3.cpp src/kdbus-enum.c src/kdbus-util.c)
+add_executable(alloc_test5 src/alloc_test5.cpp src/kdbus-enum.c src/kdbus-util.c)
+#add_executable(test_writer src/kdbus-enum.c src/kdbus-util.c src/test_writer.cpp)
+#add_executable(test_reader src/kdbus-enum.c src/kdbus-util.c src/test_reader.cpp)
 
-target_link_libraries(alloc_test3 rt)
-target_link_libraries(talko ${catkin_LIBRARIES})
-target_link_libraries(test_reader ${catkin_LIBRARIES})
-target_link_libraries(test_writer ${catkin_LIBRARIES})
+#target_link_libraries(alloc_test3 rt)
+target_link_libraries(alloc_test5 rt)
+#target_link_libraries(talko ${catkin_LIBRARIES})
+#target_link_libraries(test_reader ${catkin_LIBRARIES})
+#target_link_libraries(test_writer ${catkin_LIBRARIES})
 

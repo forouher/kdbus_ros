@@ -14,7 +14,7 @@
 #include <boost/interprocess/containers/string.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 
-#include "ros/ros.h"
+//#include "ros/ros.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -36,7 +36,7 @@ extern "C"
 #include "kdbus-enum.h"
 }
 
-#include "std_msgs/String.h"
+//#include "std_msgs/String.h"
 #include "tf2_msgs/TFMessage.h"
 #include "ros/allocator.h"
 #include "ros/boost_container.h"
@@ -44,74 +44,6 @@ extern "C"
 #define KBUILD_MODNAME "kdbus"
 
 
-// msg_inner
-namespace msgs_test {
-
-template <class ContainerAllocator>
-struct inner_ {
-
-    // this is used by magic outside. not sure how
-    typedef ContainerAllocator allocator_type;
-
-    typedef boost::container::basic_string<char, std::char_traits< char >, typename ContainerAllocator::template rebind<char>::other > MyString;
-    MyString s;
-
-    typedef boost::container::scoped_allocator_adaptor<typename ContainerAllocator::template rebind<MyString>::other> AllocScoped;
-    typedef boost::container::vector<MyString, AllocScoped> MyVector;
-    MyVector vi;
-
-    int i;
-    float f;
-
-    explicit inner_(const ContainerAllocator& alloc = allocator_type())
-	: vi(alloc), s(alloc)
-    { }
-
-    inner_(const inner_& i, const ContainerAllocator& alloc = allocator_type())
-	: vi(i.vi, alloc), s(i.s, alloc)
-    { }
-
-};
-
-//typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_memfd_memory> > inner;
-//typedef ::msgs_test::inner_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > inner;
-typedef ::msgs_test::inner_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > inner;
-
-
-// msg_outer
-template <class ContainerAllocator>
-struct outer_ {
-
-    // this is used by magic outside. not sure how
-    typedef ContainerAllocator allocator_type;
-
-    typedef boost::container::scoped_allocator_adaptor<typename ContainerAllocator::template rebind<inner>::other> AllocScoped;
-    typedef boost::container::vector<inner, AllocScoped> MyVectorV;
-    MyVectorV v;
-    MyVectorV v2;
-
-    int i;
-    float f;
-
-    outer_(const ContainerAllocator& alloc = allocator_type())
-	: v(alloc), v2(alloc)
-    { }
-
-    outer_(const outer_& o, const ContainerAllocator& alloc = allocator_type())
-	: v(o.v, alloc), v2(o.v, alloc)
-    { }
-
-};
-
-// ros::segment_manager (base class)
-// ros::simple_segment_manager : ros::segment_manager (behaves like std::allocator)
-// ros::kdbus_segment_manager : ros::segment_manager (stores in kdbus fd)
-
-//typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_memfd_memory> > outer;
-typedef ::msgs_test::outer_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > outer;
-//typedef ::msgs_test::outer_<boost::interprocess::allocator< void, boost::interprocess::managed_shared_memory::segment_manager> > outer;
-
-}
 
 
 void dump_memory(char* data, size_t len)
@@ -127,8 +59,8 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg);
 
 int msg_send_dis(const struct conn *conn, const char *name, uint64_t cookie, uint64_t dst_id);
 
-size_t offset_alloc = sizeof(ros::allocator<void>);
-size_t offset_struct = sizeof(std_msgs::String_<ros::allocator<void> >);
+//size_t offset_alloc = sizeof(ros::allocator<void>);
+//size_t offset_struct = sizeof(std_msgs::String_<ros::allocator<void> >);
 
 int msg_send(const struct conn *conn,
 		    const char *name,
@@ -173,81 +105,40 @@ int msg_send(const struct conn *conn,
       boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, address_fd, memfd_size);
 		fprintf(stderr,"3\n");
 
+	boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> alloc_foo;
+
       //Initialize shared memory STL-compatible allocator
-      msgs_test::outer::AllocScoped alloc_inst (segment.get_segment_manager());
+      tf2_msgs::TFMessage::allocator alloc_inst (segment.get_segment_manager());
 		fprintf(stderr,"4\n");
 
       //Construct a vector named "msg" in shared memory with argument alloc_inst
-      typedef std_msgs::String MyMsg;
-      MyMsg *msg = segment.construct<MyMsg>("MyVector")(alloc_inst);
+//	std_msgs::String src;
+//	src.data = ros::messages::types::string("foo211111111111111111111111111111111111111111111111111111111", alloc_inst);
+
+      tf2_msgs::TFMessage *msg = segment.construct<tf2_msgs::TFMessage>("MyVector")(alloc_inst);
 		fprintf(stderr,"5\n");
 
-      const char* test = "oierwuiofjoihedfsjfigjisjijiogfiieejiogvejiogfejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
-      const char* testvi = "11111111111111111111111111111111111111111ejfigivdjiofjdifvodjdjvdviodjiodsfjwfjwiowjfiowj";
+	tf2_msgs::TFMessage tfm(alloc_foo);
+	tfm.transforms.resize(1);
+	tfm.transforms[0].header.frame_id = ros::messages::types::string("foo1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!", alloc_foo);
+	tfm.transforms[0].child_frame_id = ros::messages::types::string("bar1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!", alloc_foo);
+//	tfm.transforms[0].header.frame_id = ros::messages::types::string("foo1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!", alloc_inst);
+//	tfm.transforms[0].header.frame_id = "foo";
+	tfm.transforms[0].header.seq = 42;
 
-//	std_msgs::String_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > test123;
-//	tf2_msgs::TFMessage_<boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> > test33;
+//      std_msgs::String *msg = segment.construct<std_msgs::String>("MyVector")(alloc_inst);
+//		fprintf(stderr,"5\n");
 
-	MyMsg src;
-	src.data = "foo211111111111111111111111111111111111111111111111111111111";
+	*msg = tfm;
+//	msg->transforms = tfm.transforms;
+//	msg->transforms[0] = tfm.transforms[0];
+//	tfm.transforms[0].header.frame_id = ros::messages::types::string("foo1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!", alloc_inst);
 
-	*msg = src;
+	printf("size of msg arr: %li\n", msg->transforms.size());
+//	printf("good string in msg arr: %s\n", tfm.transforms[0].header.frame_id.c_str());
+	printf("baad in msg arr: %s\n", msg->transforms[0].header.frame_id.c_str());
 
-/*      msgs_test::inner foo;
-      msgs_test::inner foo2;
-      foo.vi.resize(1);
-      foo.vi[0] = testvi;
-      foo2 = foo;
 
-      msgs_test::outer bar;
-      msgs_test::outer bar2;
-      bar2 = bar;
-
-      msg->v.resize(1);
-      msg->v[0] = foo2;
-      msg->v.at(0).vi.resize(5);
-      for(int i = 0; i < 5; ++i)  //Insert data in the vector
-	msg->v[0].vi[i] = test;
-
-      for(int i = 0; i < 10; ++i)  //Insert data in the vector
-         msg->v[0].vi.push_back(msgs_test::inner::MyString(test, alloc_inst));
-
-      msg->v[0].vi.push_back(foo.vi[0]);
-		fprintf(stderr,"6\n");
-	}
-*//*
-//		std_msgs::String_<ros::allocator<void> > msg_pub;
-//		msg_pub.data = "0Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
-
-		tf2_msgs::TFMessage_<ros::allocator<void> > msg_pub;
-		msg_pub.transforms.resize(3);
-//		msg_pub.transforms[0].header.frame_id = "Foo1";
-//		msg_pub.transforms[1].header.frame_id = "Foo2";
-//		msg_pub.transforms[2].header.frame_id = "Foo3";
-		msg_pub.transforms[0].header.frame_id = "0Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
-		msg_pub.transforms[1].header.frame_id = "1Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
-		msg_pub.transforms[2].header.frame_id = "2Hello worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
-		msg_pub.transforms[0].transform.translation.x = 05;
-		msg_pub.transforms[1].transform.translation.x = 15;
-		msg_pub.transforms[2].transform.translation.x = 25;
-
-//		printf("msg_pub.transforms.alloc()==msg_pub.transforms[0].header.frame_id.alloc(): %i\n", msg_pub.transforms.get_stored_allocator()==msg_pub.transforms[0].header.frame_id.get_allocator());
-
-		ros::allocator<void>* my_alloc = new(address_fd) ros::allocator<void>(address_fd+offset_alloc+offset_struct);
-		tf2_msgs::TFMessage_<ros::allocator<void> >* msg_kdbus = new(address_fd+offset_alloc) tf2_msgs::TFMessage_<ros::allocator<void> >(*my_alloc);
-//		std_msgs::String_<ros::allocator<void> >* msg_kdbus = new(address_fd+offset_alloc) std_msgs::String_<ros::allocator<void> >(*my_alloc);
-		*msg_kdbus = msg_pub;
-
-		msg_pub.transforms[0].header.frame_id = "000llo worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
-		msg_pub.transforms[1].header.frame_id = "111llo worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
-		msg_pub.transforms[2].header.frame_id = "222llo worldjfigpdjsjhiopdfsdhjopdfhodpdfophkoddofhdhdopkhdophkdophkdhopdkhopdkhopdhkdophkdhopdkhopdkhopdhpdEND";
-
-		printf("ROS: orig  size=%li\n", msg_pub.transforms.size());
-		printf("ROS: kdbus size=%li\n", msg_kdbus->transforms.size());
-		printf("some string %s\n", msg_kdbus->transforms[0].header.frame_id.c_str());
-
-		dump_memory(address_fd, 1000);
-*/
 		munmap(address_fd,memfd_size);
 		fprintf(stderr,"7\n");
 
@@ -411,26 +302,29 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 
 			dump_memory(buf, 1000);
 
-			size_t offset_alloc = sizeof(ros::allocator<void>);
-			const tf2_msgs::TFMessage_<ros::allocator<void> >* msg_kdbus2 = reinterpret_cast<const tf2_msgs::TFMessage_<ros::allocator<void> >* >(buf+offset_alloc);
+//			size_t offset_alloc = sizeof(ros::allocator<void>);
 
 		      boost::interprocess::managed_external_buffer segment(boost::interprocess::open_only, buf, 200000); // "50Gb ought to be enough for anyone"
 
 		      //Find the vector using the c-string name
-		      typedef std_msgs::String MyMsg;
-    		       MyMsg *msg = segment.find<MyMsg>("MyVector").first;
+//    		       std_msgs::String *msg = segment.find<std_msgs::String>("MyVector").first;
+    		       tf2_msgs::TFMessage *msg = segment.find<tf2_msgs::TFMessage>("MyVector").first;
 
-		          printf("%i: got string: ->%s<-\n",0, msg->data.c_str());
+		          printf("%i: size of array ->%lu<-\n",0, msg->transforms.size());
+
+		          printf("%i: got seq: ->%i<-\n",0, msg->transforms[0].header.seq);
+		          printf("%i: got child string: ->%s<-\n",0, msg->transforms[0].child_frame_id.c_str());
+		          printf("%i: got string: ->%s<-\n",0, msg->transforms[0].header.frame_id.c_str());
 //			for(int i = 0; i < msg->v.at(0).vi.size(); ++i)  //Insert data in the vector
 //		          printf("%i: got string: ->%s<-\n",i, msg->v.at(0).vi.at(i).c_str());
 
 
 //			printf("ROS: tf0=%lf  tf1=%lf tf2=%lf \n",  msg_kdbus2->transforms[0].transform.translation.x,  msg_kdbus2->transforms[1].transform.translation.x,  msg_kdbus2->transforms[2].transform.translation.x);
 //			printf("ROS: size kdbus=%li\n",  msg_kdbus2->transforms.size()); // msg_kdbus2->transforms[0].header.frame_id.c_str()
-			printf("  +%s (%llu bytes) fd=%i size=%llu filesize=%llu '%s'\n",
+/*			printf("  +%s (%llu bytes) fd=%i size=%llu filesize=%llu '%s'\n",
 			       enum_MSG(item->type), item->size, item->memfd.fd,
 			       (unsigned long long)item->memfd.size, (unsigned long long)size, msg_kdbus2->transforms[0].header.frame_id.c_str());
-			break;
+*/			break;
 		}
 
 		case KDBUS_ITEM_CREDS:
