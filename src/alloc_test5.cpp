@@ -43,21 +43,7 @@ extern "C"
 
 #define KBUILD_MODNAME "kdbus"
 
-
-
-
-void dump_memory(char* data, size_t len)
-{
-    size_t i;
-    printf("Data in [%p..%p): ",data,data+len);
-    for (i=0;i<len;i++)
-        printf("%02X ", ((unsigned char*)data)[i] );
-    printf("\n");
-}
-
 void msg_dump(const struct conn *conn, const struct kdbus_msg *msg);
-
-int msg_send_dis(const struct conn *conn, const char *name, uint64_t cookie, uint64_t dst_id);
 
 int msg_send(const struct conn *conn,
 		    const char *name,
@@ -65,61 +51,49 @@ int msg_send(const struct conn *conn,
 		    uint64_t dst_id,
 		    tf2_msgs::TFMessage& m)
 {
-	struct kdbus_msg *msg;
-	const char ref1[1024 * 1024 + 3] = "0123456789_0";
-	const char ref2[] = "0123456789_1";
-	struct kdbus_item *item;
-	uint64_t size;
-	int memfd = -1;
 	int ret;
 
-	size = sizeof(struct kdbus_msg);
-	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_vec));
-	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_vec));
-	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_vec));
-
-{
-		ret = ioctl(conn->fd, KDBUS_CMD_MEMFD_NEW, &memfd);
-		if (ret < 0) {
-			fprintf(stderr, "KDBUS_CMD_MEMFD_NEW failed: %m\n");
-			return EXIT_FAILURE;
-		}
-
-		const int memfd_size = 200000;
-
-		char* address_fd = (char*)mmap(NULL, memfd_size,PROT_WRITE,MAP_SHARED,memfd,0);
-		if (MAP_FAILED == address_fd) {
-			fprintf(stderr, "mmap() to memfd failed: %m\n");
-			return EXIT_FAILURE;
-		}
-
-		memset(address_fd, 0xAA, memfd_size);
-
-      //Create a new segment with given name and size
-      boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, address_fd, memfd_size);
-      tf2_msgs::TFMessage::allocator alloc (segment.get_segment_manager());
-      segment.construct<tf2_msgs::TFMessage>("MyVector")(m,alloc);
-
-		munmap(address_fd,memfd_size);
-
-		ret = ioctl(memfd, KDBUS_CMD_MEMFD_SEAL_SET, true);
-		if (ret < 0) {
-			fprintf(stderr, "memfd sealing failed: %m\n");
-			return EXIT_FAILURE;
-		}
-
-		size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_memfd));
+	int memfd = -1;
+	ret = ioctl(conn->fd, KDBUS_CMD_MEMFD_NEW, &memfd);
+	if (ret < 0) {
+		fprintf(stderr, "KDBUS_CMD_MEMFD_NEW failed: %m\n");
+		return EXIT_FAILURE;
 	}
+
+	const int memfd_size = 200000;
+
+	char* address_fd = (char*)mmap(NULL, memfd_size,PROT_WRITE,MAP_SHARED,memfd,0);
+	if (MAP_FAILED == address_fd) {
+		fprintf(stderr, "mmap() to memfd failed: %m\n");
+		return EXIT_FAILURE;
+	}
+
+	//Create a new segment with given name and size
+	boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, address_fd, memfd_size);
+	tf2_msgs::TFMessage::allocator alloc (segment.get_segment_manager());
+	segment.construct<tf2_msgs::TFMessage>("MyVector")(m,alloc);
+
+	munmap(address_fd,memfd_size);
+
+	ret = ioctl(memfd, KDBUS_CMD_MEMFD_SEAL_SET, true);
+	if (ret < 0) {
+		fprintf(stderr, "memfd sealing failed: %m\n");
+		return EXIT_FAILURE;
+	}
+
+	uint64_t size = sizeof(struct kdbus_msg);
+	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_memfd));
 
 	if (name)
 		size += KDBUS_ITEM_SIZE(strlen(name) + 1);
 
-	msg = (kdbus_msg*)malloc(size);
+	struct kdbus_msg *msg = (kdbus_msg*)malloc(size);
 	if (!msg) {
 		fprintf(stderr, "unable to malloc()!?\n");
 		return EXIT_FAILURE;
 	}
 
+	// create new kdbus message
 	memset(msg, 0, size);
 	msg->size = size;
 	msg->src_id = conn->id;
@@ -127,8 +101,10 @@ int msg_send(const struct conn *conn,
 	msg->cookie = cookie;
 	msg->payload_type = KDBUS_PAYLOAD_DBUS;
 
-	item = msg->items;
+	// start with first item
+	struct kdbus_item *item = msg->items;
 
+	// start with name
 	if (name) {
 		item->type = KDBUS_ITEM_DST_NAME;
 		item->size = KDBUS_ITEM_HEADER_SIZE + strlen(name) + 1;
@@ -136,34 +112,11 @@ int msg_send(const struct conn *conn,
 		item = KDBUS_ITEM_NEXT(item);
 	}
 
-	item->type = KDBUS_ITEM_PAYLOAD_VEC;
-	item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_vec);
-	item->vec.address = (uintptr_t)&ref1;
-	item->vec.size = sizeof(ref1);
-	item = KDBUS_ITEM_NEXT(item);
-
-	/* data padding for ref1 */
-	item->type = KDBUS_ITEM_PAYLOAD_VEC;
-	item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_vec);
-	item->vec.address = (uintptr_t)NULL;
-	item->vec.size =  KDBUS_ALIGN8(sizeof(ref1)) - sizeof(ref1);
-	item = KDBUS_ITEM_NEXT(item);
-
-	item->type = KDBUS_ITEM_PAYLOAD_VEC;
-	item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_vec);
-	item->vec.address = (uintptr_t)&ref2;
-	item->vec.size = sizeof(ref2);
-	item = KDBUS_ITEM_NEXT(item);
-
-/*	if (dst_id == KDBUS_DST_ID_BROADCAST) {
-		item->type = KDBUS_ITEM_BLOOM;
-		item->size = KDBUS_ITEM_HEADER_SIZE + 64;
-	} else {*/
-		item->type = KDBUS_ITEM_PAYLOAD_MEMFD;
-		item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_memfd);
-		item->memfd.size = 16;
-		item->memfd.fd = memfd;
-//	}
+	// next is our memfd
+	item->type = KDBUS_ITEM_PAYLOAD_MEMFD;
+	item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_memfd);
+	item->memfd.size = 16;
+	item->memfd.fd = memfd;
 	item = KDBUS_ITEM_NEXT(item);
 
 	ret = ioctl(conn->fd, KDBUS_CMD_MSG_SEND, msg);
@@ -174,6 +127,7 @@ int msg_send(const struct conn *conn,
 
 	if (memfd >= 0)
 		close(memfd);
+
 	free(msg);
 
 	return 0;
@@ -211,17 +165,12 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 	uint64_t timeout = 0;
 	uint64_t cookie_reply = 0;
 
+/*
 	if (msg->flags & KDBUS_MSG_FLAGS_EXPECT_REPLY)
 		timeout = msg->timeout_ns;
 	else
 		cookie_reply = msg->cookie_reply;
-
-	printf("MESSAGE: %s (%llu bytes) flags=0x%08llx, %s → %s, cookie=%llu, timeout=%llu cookie_reply=%llu\n",
-		enum_PAYLOAD(msg->payload_type), (unsigned long long)msg->size,
-		(unsigned long long)msg->flags,
-		msg_id(msg->src_id, buf_src), msg_id(msg->dst_id, buf_dst),
-		(unsigned long long)msg->cookie, (unsigned long long)timeout, (unsigned long long)cookie_reply);
-
+*/
 	KDBUS_ITEM_FOREACH(item, msg, items) {
 		if (item->size <= KDBUS_ITEM_HEADER_SIZE) {
 			printf("  +%s (%llu bytes) invalid data record\n", enum_MSG(item->type), item->size);
@@ -229,20 +178,6 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 		}
 
 		switch (item->type) {
-		case KDBUS_ITEM_PAYLOAD_OFF: {
-			const char *s;
-
-			if (item->vec.offset == ~0ULL)
-				s = "[\\0-bytes]";
-			else
-				s = (char *)conn->buf + item->vec.offset;
-
-			printf("  +%s (%llu bytes) off=%llu size=%llu '%s'\n",
-			       enum_MSG(item->type), item->size,
-			       (unsigned long long)item->vec.offset,
-			       (unsigned long long)item->vec.size, s);
-			break;
-		}
 
 		case KDBUS_ITEM_PAYLOAD_MEMFD: {
 			char *buf;
@@ -259,50 +194,17 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 				break;
 			}
 
-			dump_memory(buf, 1000);
-
-//			size_t offset_alloc = sizeof(ros::allocator<void>);
-
 		      boost::interprocess::managed_external_buffer segment(boost::interprocess::open_only, buf, 200000); // "50Gb ought to be enough for anyone"
-
-		      //Find the vector using the c-string name
-//    		       std_msgs::String *msg = segment.find<std_msgs::String>("MyVector").first;
     		       tf2_msgs::TFMessage *msg = segment.find<tf2_msgs::TFMessage>("MyVector").first;
 
 		          printf("%i: size of array ->%lu<-\n",0, msg->transforms.size());
-
 		          printf("%i: got seq: ->%i<-\n",0, msg->transforms[0].header.seq);
 		          printf("%i: got child string: ->%s<-\n",0, msg->transforms[0].child_frame_id.c_str());
 		          printf("%i: got string: ->%s<-\n",0, msg->transforms[0].header.frame_id.c_str());
-//			for(int i = 0; i < msg->v.at(0).vi.size(); ++i)  //Insert data in the vector
-//		          printf("%i: got string: ->%s<-\n",i, msg->v.at(0).vi.at(i).c_str());
 
 
-//			printf("ROS: tf0=%lf  tf1=%lf tf2=%lf \n",  msg_kdbus2->transforms[0].transform.translation.x,  msg_kdbus2->transforms[1].transform.translation.x,  msg_kdbus2->transforms[2].transform.translation.x);
-//			printf("ROS: size kdbus=%li\n",  msg_kdbus2->transforms.size()); // msg_kdbus2->transforms[0].header.frame_id.c_str()
-/*			printf("  +%s (%llu bytes) fd=%i size=%llu filesize=%llu '%s'\n",
-			       enum_MSG(item->type), item->size, item->memfd.fd,
-			       (unsigned long long)item->memfd.size, (unsigned long long)size, msg_kdbus2->transforms[0].header.frame_id.c_str());
-*/			break;
+			break;
 		}
-
-		case KDBUS_ITEM_CREDS:
-			printf("  +%s (%llu bytes) uid=%lld, gid=%lld, pid=%lld, tid=%lld, starttime=%lld\n",
-				enum_MSG(item->type), item->size,
-				item->creds.uid, item->creds.gid,
-				item->creds.pid, item->creds.tid,
-				item->creds.starttime);
-			break;
-
-		case KDBUS_ITEM_PID_COMM:
-		case KDBUS_ITEM_TID_COMM:
-		case KDBUS_ITEM_EXE:
-		case KDBUS_ITEM_CGROUP:
-		case KDBUS_ITEM_SECLABEL:
-		case KDBUS_ITEM_DST_NAME:
-			printf("  +%s (%llu bytes) '%s' (%zu)\n",
-			       enum_MSG(item->type), item->size, item->str, strlen(item->str));
-			break;
 
 		case KDBUS_ITEM_NAME: {
 			printf("  +%s (%llu bytes) '%s' (%zu) flags=0x%08llx\n",
@@ -310,91 +212,6 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 			       item->name.flags);
 			break;
 		}
-
-		case KDBUS_ITEM_CMDLINE: {
-			size_t size = item->size - KDBUS_ITEM_HEADER_SIZE;
-			const char *str = item->str;
-			int count = 0;
-
-			printf("  +%s (%llu bytes) ", enum_MSG(item->type), item->size);
-			while (size) {
-				printf("'%s' ", str);
-				size -= strlen(str) + 1;
-				str += strlen(str) + 1;
-				count++;
-			}
-
-			printf("(%d string%s)\n", count, (count == 1) ? "" : "s");
-			break;
-		}
-
-		case KDBUS_ITEM_AUDIT:
-			printf("  +%s (%llu bytes) loginuid=%llu sessionid=%llu\n",
-			       enum_MSG(item->type), item->size,
-			       (unsigned long long)item->data64[0],
-			       (unsigned long long)item->data64[1]);
-			break;
-
-		case KDBUS_ITEM_CAPS: {
-			int n;
-			const uint32_t *cap;
-			int i;
-
-			printf("  +%s (%llu bytes) len=%llu bytes\n",
-			       enum_MSG(item->type), item->size,
-			       (unsigned long long)item->size - KDBUS_ITEM_HEADER_SIZE);
-
-			cap = item->data32;
-			n = (item->size - KDBUS_ITEM_HEADER_SIZE) / 4 / sizeof(uint32_t);
-
-			printf("    CapInh=");
-			for (i = 0; i < n; i++)
-				printf("%08x", cap[(0 * n) + (n - i - 1)]);
-
-			printf(" CapPrm=");
-			for (i = 0; i < n; i++)
-				printf("%08x", cap[(1 * n) + (n - i - 1)]);
-
-			printf(" CapEff=");
-			for (i = 0; i < n; i++)
-				printf("%08x", cap[(2 * n) + (n - i - 1)]);
-
-			printf(" CapInh=");
-			for (i = 0; i < n; i++)
-				printf("%08x", cap[(3 * n) + (n - i - 1)]);
-			printf("\n");
-			break;
-		}
-
-		case KDBUS_ITEM_TIMESTAMP:
-			printf("  +%s (%llu bytes) realtime=%lluns monotonic=%lluns\n",
-			       enum_MSG(item->type), item->size,
-			       (unsigned long long)item->timestamp.realtime_ns,
-			       (unsigned long long)item->timestamp.monotonic_ns);
-			break;
-
-		case KDBUS_ITEM_REPLY_TIMEOUT:
-			printf("  +%s (%llu bytes) cookie=%llu\n",
-			       enum_MSG(item->type), item->size, msg->cookie_reply);
-			break;
-
-		case KDBUS_ITEM_NAME_ADD:
-		case KDBUS_ITEM_NAME_REMOVE:
-		case KDBUS_ITEM_NAME_CHANGE:
-			printf("  +%s (%llu bytes) '%s', old id=%lld, new id=%lld, old_flags=0x%llx new_flags=0x%llx\n",
-				enum_MSG(item->type), (unsigned long long) item->size,
-				item->name_change.name, item->name_change.old.id,
-				item->name_change.new2.id, item->name_change.old.flags,
-				item->name_change.new2.flags);
-			break;
-
-		case KDBUS_ITEM_ID_ADD:
-		case KDBUS_ITEM_ID_REMOVE:
-			printf("  +%s (%llu bytes) id=%llu flags=%llu\n",
-			       enum_MSG(item->type), (unsigned long long) item->size,
-			       (unsigned long long) item->id_change.id,
-			       (unsigned long long) item->id_change.flags);
-			break;
 
 		default:
 			printf("  +%s (%llu bytes)\n", enum_MSG(item->type), item->size);
@@ -413,11 +230,7 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 //Main function. For parent process argc == 1, for child process argc == 2
 int main(int argc, char *argv[])
 {
-//    ros::init(argc, argv, "test_reader");
-//    ros::NodeHandle n;
-
    if(argc == 1){ //Parent process
-
 
 	struct {
 		struct kdbus_cmd_make head;
@@ -461,15 +274,6 @@ int main(int argc, char *argv[])
 	bus_make.head.size = sizeof(struct kdbus_cmd_make) +
 			     sizeof(bus_make.bs) +
 			     bus_make.n_size;
-
-/*
-	printf("-- creating bus '%s'\n", bus_make.name);
-	ret = ioctl(fdc, KDBUS_CMD_BUS_MAKE, &bus_make);
-	if (ret) {
-		fprintf(stderr, "--- error %d (%m)\n", ret);
-		return EXIT_FAILURE;
-	}
-*/
 
 	if (asprintf(&bus, "/dev/kdbus/%s/bus", bus_make.name) < 0)
 		return EXIT_FAILURE;
@@ -524,12 +328,7 @@ int main(int argc, char *argv[])
 	printf("-- closing bus master\n");
 	close(fdc);
 	free(bus);
-/*
-      //Launch child process
-      std::string s(argv[0]); s += " child ";
-      if(0 != std::system(s.c_str()))
-         return 1;
-*/
+
 	return EXIT_SUCCESS;
 
    }
@@ -635,19 +434,6 @@ int main(int argc, char *argv[])
 
 	return EXIT_SUCCESS;
 
-
-      //Open the managed segment
-//      boost::interprocess::managed_shared_memory segment(boost::interprocess::open_only, "MySharedMemory");
-//      boost::interprocess::managed_memfd_file segment(boost::interprocess::open_only,"./demo.db"); // "50Gb ought to be enough for anyone"
-
-      //Find the vector using the c-string name
-//      msgs_test::outer *msg = segment.find<msgs_test::outer>("MyVector").first;
-
-//      for(int i = 0; i < msg->v.at(0).vi.size(); ++i)  //Insert data in the vector
-//          printf("%i: got string: ->%s<-\n",i, msg->v.at(0).vi.at(i).c_str());
-
-      //When done, destroy the vector from the segment
-//      segment.destroy<msgs_test::outer>("MyVector");
    }
 
    return 0;
