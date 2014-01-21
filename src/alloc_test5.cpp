@@ -59,9 +59,6 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg);
 
 int msg_send_dis(const struct conn *conn, const char *name, uint64_t cookie, uint64_t dst_id);
 
-//size_t offset_alloc = sizeof(ros::allocator<void>);
-//size_t offset_struct = sizeof(std_msgs::String_<ros::allocator<void> >);
-
 int msg_send(const struct conn *conn,
 		    const char *name,
 		    uint64_t cookie,
@@ -81,9 +78,7 @@ int msg_send(const struct conn *conn,
 	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_vec));
 	size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_vec));
 
-	if (dst_id == KDBUS_DST_ID_BROADCAST)
-		size += KDBUS_ITEM_HEADER_SIZE + 64;
-	else {
+{
 		ret = ioctl(conn->fd, KDBUS_CMD_MEMFD_NEW, &memfd);
 		if (ret < 0) {
 			fprintf(stderr, "KDBUS_CMD_MEMFD_NEW failed: %m\n");
@@ -92,7 +87,6 @@ int msg_send(const struct conn *conn,
 
 		const int memfd_size = 200000;
 
-		fprintf(stderr,"1\n");
 		char* address_fd = (char*)mmap(NULL, memfd_size,PROT_WRITE,MAP_SHARED,memfd,0);
 		if (MAP_FAILED == address_fd) {
 			fprintf(stderr, "mmap() to memfd failed: %m\n");
@@ -101,7 +95,6 @@ int msg_send(const struct conn *conn,
 
 		memset(address_fd, 0xAA, memfd_size);
 
-		fprintf(stderr,"2\n");
       //Create a new segment with given name and size
       boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, address_fd, memfd_size);
       tf2_msgs::TFMessage::allocator alloc (segment.get_segment_manager());
@@ -117,7 +110,6 @@ int msg_send(const struct conn *conn,
 
 		size += KDBUS_ITEM_SIZE(sizeof(struct kdbus_memfd));
 	}
-		fprintf(stderr,"8\n");
 
 	if (name)
 		size += KDBUS_ITEM_SIZE(strlen(name) + 1);
@@ -163,15 +155,15 @@ int msg_send(const struct conn *conn,
 	item->vec.size = sizeof(ref2);
 	item = KDBUS_ITEM_NEXT(item);
 
-	if (dst_id == KDBUS_DST_ID_BROADCAST) {
+/*	if (dst_id == KDBUS_DST_ID_BROADCAST) {
 		item->type = KDBUS_ITEM_BLOOM;
 		item->size = KDBUS_ITEM_HEADER_SIZE + 64;
-	} else {
+	} else {*/
 		item->type = KDBUS_ITEM_PAYLOAD_MEMFD;
 		item->size = KDBUS_ITEM_HEADER_SIZE + sizeof(struct kdbus_memfd);
 		item->memfd.size = 16;
 		item->memfd.fd = memfd;
-	}
+//	}
 	item = KDBUS_ITEM_NEXT(item);
 
 	ret = ioctl(conn->fd, KDBUS_CMD_MSG_SEND, msg);
