@@ -65,7 +65,8 @@ int msg_send_dis(const struct conn *conn, const char *name, uint64_t cookie, uin
 int msg_send(const struct conn *conn,
 		    const char *name,
 		    uint64_t cookie,
-		    uint64_t dst_id)
+		    uint64_t dst_id,
+		    tf2_msgs::TFMessage& m)
 {
 	struct kdbus_msg *msg;
 	const char ref1[1024 * 1024 + 3] = "0123456789_0";
@@ -103,44 +104,10 @@ int msg_send(const struct conn *conn,
 		fprintf(stderr,"2\n");
       //Create a new segment with given name and size
       boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, address_fd, memfd_size);
-		fprintf(stderr,"3\n");
-
-	boost::interprocess::ros_allocator< void, boost::interprocess::managed_external_buffer::segment_manager> alloc_foo;
-
-      //Initialize shared memory STL-compatible allocator
-      tf2_msgs::TFMessage::allocator alloc_inst (segment.get_segment_manager());
-		fprintf(stderr,"4\n");
-
-      //Construct a vector named "msg" in shared memory with argument alloc_inst
-//	std_msgs::String src;
-//	src.data = ros::messages::types::string("foo211111111111111111111111111111111111111111111111111111111", alloc_inst);
-
-      tf2_msgs::TFMessage *msg = segment.construct<tf2_msgs::TFMessage>("MyVector")(alloc_inst);
-		fprintf(stderr,"5\n");
-
-	tf2_msgs::TFMessage tfm(alloc_foo);
-	tfm.transforms.resize(1);
-	tfm.transforms[0].header.frame_id = ros::messages::types::string("foo1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!", alloc_foo);
-	tfm.transforms[0].child_frame_id = ros::messages::types::string("bar1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!", alloc_foo);
-//	tfm.transforms[0].header.frame_id = ros::messages::types::string("foo1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!", alloc_inst);
-//	tfm.transforms[0].header.frame_id = "foo";
-	tfm.transforms[0].header.seq = 42;
-
-//      std_msgs::String *msg = segment.construct<std_msgs::String>("MyVector")(alloc_inst);
-//		fprintf(stderr,"5\n");
-
-	*msg = tfm;
-//	msg->transforms = tfm.transforms;
-//	msg->transforms[0] = tfm.transforms[0];
-//	tfm.transforms[0].header.frame_id = ros::messages::types::string("foo1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!", alloc_inst);
-
-	printf("size of msg arr: %li\n", msg->transforms.size());
-//	printf("good string in msg arr: %s\n", tfm.transforms[0].header.frame_id.c_str());
-	printf("baad in msg arr: %s\n", msg->transforms[0].header.frame_id.c_str());
-
+      tf2_msgs::TFMessage::allocator alloc (segment.get_segment_manager());
+      segment.construct<tf2_msgs::TFMessage>("MyVector")(m,alloc);
 
 		munmap(address_fd,memfd_size);
-		fprintf(stderr,"7\n");
 
 		ret = ioctl(memfd, KDBUS_CMD_MEMFD_SEAL_SET, true);
 		if (ret < 0) {
@@ -547,7 +514,13 @@ int main(int argc, char *argv[])
 
 	cookie = 0;
 
-	msg_send(conn_b, NULL, 0xc0000000 | cookie, 1);
+	tf2_msgs::TFMessage tfm;
+	tfm.transforms.resize(1);
+	tfm.transforms[0].header.frame_id = "foo1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!";
+	tfm.transforms[0].child_frame_id = "bar1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!";
+	tfm.transforms[0].header.seq = 42;
+
+	msg_send(conn_b, NULL, 0xc0000000 | cookie, 1, tfm);
 
 	printf("-- closing bus connections\n");
 	close(conn_a->fd);
