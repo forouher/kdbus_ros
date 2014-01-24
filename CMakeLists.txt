@@ -48,7 +48,7 @@ include_directories(include
 #add_executable(alloc_test src/alloc_test.cpp)
 #add_executable(alloc_test2 src/alloc_test2.cpp)
 #add_executable(alloc_test3 src/alloc_test3.cpp src/kdbus-enum.c src/kdbus-util.c)
-add_executable(alloc_test5 src/alloc_test5.cpp src/kdbus-enum.c src/kdbus-util.c)
+add_executable(alloc_test5 src/alloc_test5.cpp src/kdbus-enum.c src/kdbus-util.c src/kdbus_transport.cpp)
 #add_executable(test_writer src/kdbus-enum.c src/kdbus-util.c src/test_writer.cpp)
 #add_executable(test_reader src/kdbus-enum.c src/kdbus-util.c src/test_reader.cpp)
 

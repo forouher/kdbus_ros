@@ -14,7 +14,6 @@
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include "kdbus_transport.h"
 
 extern "C" 
 {
@@ -23,19 +22,112 @@ extern "C"
 #include "kdbus-enum.h"
 }
 
-#include "tf2_msgs/TFMessage.h"
-
 #include <boost/interprocess/managed_external_buffer.hpp>
 
 #define KBUILD_MODNAME "kdbus"
 
+#include "kdbus_transport.h"
+
+namespace ros {
+
+KDBusTransport::KDBusTransport(const std::string& name) {
+
+    bus = name;
+    buspath = "/dev/kdbus/"+name+"/bus";
+
+}
+
+int KDBusTransport::create_bus() {
+
+	struct {
+		struct kdbus_cmd_make head;
+
+		struct {
+			uint64_t size;
+			uint64_t type;
+			uint64_t bloom_size;
+		} bs;
+
+		uint64_t n_size;
+		uint64_t n_type;
+		char name[64];
+	} bus_make;
+
+	int ret;
+
+	printf("-- opening /dev/kdbus/control\n");
+	fdc = open("/dev/kdbus/control", O_RDWR|O_CLOEXEC);
+	if (fdc < 0) {
+		fprintf(stderr, "--- error %d (%m)\n", fdc);
+		return EXIT_FAILURE;
+	}
+
+	memset(&bus_make, 0, sizeof(bus_make));
+	bus_make.bs.size = sizeof(bus_make.bs);
+	bus_make.bs.type = KDBUS_ITEM_BLOOM_SIZE;
+	bus_make.bs.bloom_size = 64;
+
+	strncpy(bus_make.name, bus.c_str(),bus.length());
+	bus_make.n_type = KDBUS_ITEM_MAKE_NAME;
+	bus_make.n_size = KDBUS_ITEM_HEADER_SIZE + strlen(bus_make.name) + 1;
+
+	bus_make.head.size = sizeof(struct kdbus_cmd_make) +
+			     sizeof(bus_make.bs) +
+			     bus_make.n_size;
+
+	printf("-- creating bus '%s'\n", bus_make.name);
+	ret = ioctl(fdc, KDBUS_CMD_BUS_MAKE, &bus_make);
+	if (ret) {
+		fprintf(stderr, "--- error %d (%m)\n", ret);
+		return EXIT_FAILURE;
+	}
+
+	return 0;
+
+}
+
+int KDBusTransport::destroy_bus() {
+	close(fdc);
+}
+
+int KDBusTransport::open_connection(const std::string& name) {
+	int fdc, ret;
+	int r;
+
+	conn = connect_to_bus(buspath.c_str(), 0);
+	if (!conn)
+		return EXIT_FAILURE;
+
+	r = upload_policy(conn->fd, name.c_str());
+	if (r < 0)
+		return EXIT_FAILURE;
+	r = name_acquire(conn, name.c_str(), 0);
+	if (r < 0)
+		return EXIT_FAILURE;
+
+	add_match_empty(conn->fd);
+
+	return 0;
+
+}
+
+int KDBusTransport::close_connection() {
+	close(conn->fd);
+	free(conn);
+
+}
+
+int KDBusTransport::sendMessage() {
+
+}
+
+/*
 void msg_dump(const struct conn *conn, const struct kdbus_msg *msg);
 
 int msg_send(const struct conn *conn,
 		    const char *name,
 		    uint64_t cookie,
-		    uint64_t dst_id,
-		    tf2_msgs::TFMessage& m)
+		    uint64_t dst_id)
 {
 	int ret;
 
@@ -54,7 +146,7 @@ int msg_send(const struct conn *conn,
 		return EXIT_FAILURE;
 	}
 
-	//Create a new segment with given name and size
+/*	//Create a new segment with given name and size
 	boost::interprocess::managed_external_buffer segment(boost::interprocess::create_only, address_fd, memfd_size);
 	tf2_msgs::TFMessage::allocator alloc (segment.get_segment_manager());
 	segment.construct<tf2_msgs::TFMessage>("DATA")(m,alloc);
@@ -205,17 +297,77 @@ void msg_dump(const struct conn *conn, const struct kdbus_msg *msg)
 	printf("\n");
 }
 
-
-
+*/
+/*
 //Main function. For parent process argc == 1, for child process argc == 2
 int main(int argc, char *argv[])
 {
    if(argc == 1){ //Parent process
 
-	ros::KDBusTransport t("1000-ros");
-	t.open_connection("publisher");
+	struct {
+		struct kdbus_cmd_make head;
 
-	int cookie = 0;
+		struct {
+			uint64_t size;
+			uint64_t type;
+			uint64_t bloom_size;
+		} bs;
+
+		uint64_t n_size;
+		uint64_t n_type;
+		char name[64];
+	} bus_make;
+
+	int fdc, ret, cookie;
+	char *bus;
+	struct conn *conn_b;
+	struct pollfd fds[2];
+	int count;
+	int r;
+
+	printf("-- opening /dev/kdbus/control\n");
+	fdc = open("/dev/kdbus/control", O_RDWR|O_CLOEXEC);
+	if (fdc < 0) {
+		fprintf(stderr, "--- error %d (%m)\n", fdc);
+		return EXIT_FAILURE;
+	}
+
+	memset(&bus_make, 0, sizeof(bus_make));
+	bus_make.bs.size = sizeof(bus_make.bs);
+	bus_make.bs.type = KDBUS_ITEM_BLOOM_SIZE;
+	bus_make.bs.bloom_size = 64;
+
+	snprintf(bus_make.name, sizeof(bus_make.name), "%u-ros", getuid());
+	bus_make.n_type = KDBUS_ITEM_MAKE_NAME;
+	bus_make.n_size = KDBUS_ITEM_HEADER_SIZE + strlen(bus_make.name) + 1;
+
+	bus_make.head.size = sizeof(struct kdbus_cmd_make) +
+			     sizeof(bus_make.bs) +
+			     bus_make.n_size;
+
+	if (asprintf(&bus, "/dev/kdbus/%s/bus", bus_make.name) < 0)
+		return EXIT_FAILURE;
+
+	conn_b = connect_to_bus(bus, 0);
+	if (!conn_b)
+		return EXIT_FAILURE;
+
+	r = upload_policy(conn_b->fd, "node_pub");
+	if (r < 0)
+		return EXIT_FAILURE;
+
+	r = name_acquire(conn_b, "node_pub", KDBUS_NAME_QUEUE);
+	if (r < 0)
+		return EXIT_FAILURE;
+
+	name_list(conn_b, KDBUS_NAME_LIST_UNIQUE|
+			  KDBUS_NAME_LIST_NAMES|
+			  KDBUS_NAME_LIST_QUEUED|
+			  KDBUS_NAME_LIST_ACTIVATORS);
+
+	add_match_empty(conn_b->fd);
+
+	cookie = 0;
 
 	tf2_msgs::TFMessage tfm;
 	tfm.transforms.resize(1);
@@ -223,55 +375,23 @@ int main(int argc, char *argv[])
 	tfm.transforms[0].child_frame_id = "bar1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF!!!!!!";
 	tfm.transforms[0].header.seq = 42;
 
-	msg_send(t.conn, NULL, 0xc0000000 | cookie, 1, tfm);
+	msg_send(conn_b, NULL, 0xc0000000 | cookie, 1, tfm);
 
-	t.close_connection();
+	printf("-- closing bus connections\n");
+	close(conn_b->fd);
+	free(conn_b);
+
+	printf("-- closing bus master\n");
+	close(fdc);
+	free(bus);
 
 	return EXIT_SUCCESS;
 
    }
    else{ //Child process
 
-	ros::KDBusTransport t("1000-ros");
-	t.create_bus();
-	t.open_connection("subscriber");
-
-	int fdc, ret;
-	struct pollfd fds[1];
-	int count;
-	int r;
-	fds[0].fd = t.conn->fd;
-
-	printf("-- starting poll ...\n");
-
-	{
-		int i, nfds = 1;
-
-		fds[0].events = POLLIN | POLLPRI | POLLHUP;
-		fds[0].revents = 0;
-
-		ret = poll(fds, nfds, 1000000);
-
-		if (ret <= 0)
-			return 0;
-
-		if (fds[0].revents & POLLIN) {
-			if (count > 2)
-				name_release(t.conn, "node_sub");
-
-			msg_recv(t.conn);
-		}
-
-	}
-
-	t.close_connection();
-
-	t.destroy_bus();
-
-	return EXIT_SUCCESS;
-
-   }
-
-   return 0;
 };
+*/
+
+}
 
