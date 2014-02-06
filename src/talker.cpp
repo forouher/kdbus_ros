@@ -52,11 +52,14 @@ class talker : public nodelet::Nodelet
 
 void talker::timerCb(const ros::TimerEvent& event)
 {
+    ros::Time begin = ros::Time::now();
     sensor_msgs::PointCloud2::Ptr m = boost::make_shared<sensor_msgs::PointCloud2>();
 //    sensor_msgs::PointCloud2::Ptr m = ros::createMessage<sensor_msgs::PointCloud2>();
     m->data.resize(2000000);
     m->header.stamp = ros::Time::now();
+    ros::Time begin2 = ros::Time::now();
     pub_.publish(m);
+    ROS_INFO("msg.data.resize(size) - Elapsed time: %f & %f seconds", (begin2-begin).toSec(), (ros::Time::now()-begin2).toSec());
 }
 
 void talker::onInit()
@@ -65,7 +68,7 @@ void talker::onInit()
   ros::NodeHandle &private_nh = getPrivateNodeHandle();
 
   pub_ = nh.advertise<sensor_msgs::PointCloud2>("pcl", 1);
-  timer_ = nh.createTimer(ros::Duration(0.001), &talker::timerCb, this);
+  timer_ = nh.createTimer(ros::Duration(0.00001), &talker::timerCb, this);
 
 }
 
