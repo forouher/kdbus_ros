@@ -17,16 +17,15 @@
 
 extern "C"
 {
-
-#include "kdbus-util.h"
-#include "kdbus-enum.h"
+#include "ros/transport/kdbus-util.h"
+#include "ros/transport/kdbus-enum.h"
 }
 
 #include <boost/interprocess/managed_external_buffer.hpp>
 
 #define KBUILD_MODNAME "kdbus"
 
-#include "kdbus_transport.h"
+#include "ros/transport/kdbus_transport.h"
 
 namespace ros {
 
@@ -91,8 +90,16 @@ int KDBusTransport::destroy_bus() {
 }
 
 int KDBusTransport::open_connection(const std::string& name) {
-	int fdc, ret;
-	int r;
+	int r, ret;
+
+        if (!fdc) {
+            printf("-- opening /dev/kdbus/control\n");
+            fdc = open("/dev/kdbus/control", O_RDWR|O_CLOEXEC);
+            if (fdc < 0) {
+                fprintf(stderr, "--- error %d (%m)\n", fdc);
+                return EXIT_FAILURE;
+            }
+        }
 
 	conn = connect_to_bus(buspath.c_str(), 0);
 	if (!conn)
@@ -121,8 +128,15 @@ KDBusMessage KDBusTransport::createMessage() {
 
         int ret;
 
+	printf("-- opening /dev/kdbus/control\n");
+	int fdc2 = open("/dev/kdbus/control", O_RDWR|O_CLOEXEC);
+	if (fdc2 < 0) {
+		fprintf(stderr, "--- error %d (%m)\n", fdc2);
+		return EXIT_FAILURE;
+	}
+
         int memfd = -1;
-        ret = ioctl(conn->fd, KDBUS_CMD_MEMFD_NEW, &memfd);
+        ret = ioctl(fdc2, KDBUS_CMD_MEMFD_NEW, &memfd);
         if (ret < 0) {
                 fprintf(stderr, "KDBUS_CMD_MEMFD_NEW failed: %m\n");
 //                return EXIT_FAILURE;
@@ -137,6 +151,8 @@ KDBusMessage KDBusTransport::createMessage() {
         }
 
 	KDBusMessage m(memfd, address_fd, memfd_size);
+
+	close(fdc2);
 
 	return m;
 }

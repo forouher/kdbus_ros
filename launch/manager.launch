@@ -1,0 +1,9 @@
+<launch>
+
+  <node name="manager"
+        pkg="nodelet"
+        type="nodelet"
+	args="manager">
+  </node>
+
+</launch>

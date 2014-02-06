@@ -35,42 +35,43 @@
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
 #include <sensor_msgs/PointCloud2.h>
-//#include <ros/message_factory.h>
 
 namespace kdbus_tests {
 
-class talker : public nodelet::Nodelet
+class listener : public nodelet::Nodelet
 {
-  ros::Publisher pub_;
+  ros::Subscriber sub_;
   ros::Timer timer_;
-
+  int count_;
   virtual void onInit();
-
+  void cb(sensor_msgs::PointCloud2::Ptr p);
   void timerCb(const ros::TimerEvent& event);
-
 };
 
-void talker::timerCb(const ros::TimerEvent& event)
+void listener::timerCb(const ros::TimerEvent& event)
 {
-    sensor_msgs::PointCloud2::Ptr m = boost::make_shared<sensor_msgs::PointCloud2>();
-//    sensor_msgs::PointCloud2::Ptr m = ros::createMessage<sensor_msgs::PointCloud2>();
-    m->data.resize(2000000);
-    m->header.stamp = ros::Time::now();
-    pub_.publish(m);
+    ROS_INFO("got %i messages", count_);
+    count_=0;
 }
 
-void talker::onInit()
+void listener::cb(sensor_msgs::PointCloud2::Ptr p)
+{
+    if (!count_)
+      ROS_INFO("I heard: [seq=%i, stamp=%f]", p->header.seq,  p->header.stamp.toSec());
+
+    count_++;
+}
+
+void listener::onInit()
 {
   ros::NodeHandle &nh = getNodeHandle();
   ros::NodeHandle &private_nh = getPrivateNodeHandle();
-
-  pub_ = nh.advertise<sensor_msgs::PointCloud2>("pcl", 1);
-  timer_ = nh.createTimer(ros::Duration(0.001), &talker::timerCb, this);
-
+  sub_ = nh.subscribe("pcl", 1, &listener::cb, this);
+  timer_ = nh.createTimer(ros::Duration(1), &listener::timerCb, this);
 }
 
 }
 
 // Register nodelet
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(kdbus_tests::talker,nodelet::Nodelet)
+PLUGINLIB_EXPORT_CLASS(kdbus_tests::listener,nodelet::Nodelet)

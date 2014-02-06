@@ -1,0 +1,17 @@
+<launch>
+
+  <node name="manager2"
+        pkg="nodelet"
+        type="nodelet"
+	args="manager"
+	output="screen">
+  </node>
+
+  <node name="listener"
+        pkg="nodelet"
+        type="nodelet"
+	args="load kdbus_tests/listener manager2 --no-bond"
+	output="screen">
+  </node>
+
+</launch>
