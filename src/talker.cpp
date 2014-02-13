@@ -35,7 +35,8 @@
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
 #include <sensor_msgs/PointCloud2.h>
-//#include <ros/message_factory.h>
+#include <sensor_msgs/PointCloud3.h>
+#include <ros/message_factory.h>
 
 namespace kdbus_tests {
 
@@ -43,6 +44,7 @@ class talker : public nodelet::Nodelet
 {
   ros::Publisher pub_;
   ros::Timer timer_;
+  ros::ShmemDeque<sensor_msgs::PointCloud3>::IPtr deque_;
 
   virtual void onInit();
 
@@ -52,14 +54,23 @@ class talker : public nodelet::Nodelet
 
 void talker::timerCb(const ros::TimerEvent& event)
 {
-    ros::Time begin = ros::Time::now();
+//    ros::Time begin = ros::Time::now();
     sensor_msgs::PointCloud2::Ptr m = boost::make_shared<sensor_msgs::PointCloud2>();
-//    sensor_msgs::PointCloud2::Ptr m = ros::createMessage<sensor_msgs::PointCloud2>();
-    m->data.resize(2000000);
+    m->data.resize(4000000);
     m->header.stamp = ros::Time::now();
-    ros::Time begin2 = ros::Time::now();
+//    ros::Time begin2 = ros::Time::now();
     pub_.publish(m);
-    ROS_INFO("msg.data.resize(size) - Elapsed time: %f & %f seconds", (begin2-begin).toSec(), (ros::Time::now()-begin2).toSec());
+//    ROS_INFO("msg.data.resize(size) - Elapsed time: %f & %f seconds", (begin2-begin).toSec(), (ros::Time::now()-begin2).toSec());
+
+    ROS_INFO("Trying to build pcl3");
+    sensor_msgs::PointCloud3::IPtr m2 = ros::MessageFactory::createMessage<sensor_msgs::PointCloud3>();
+    deque_->add(m2);
+    deque_->remove();
+
+    // TODO:
+    // 1. send UUID of ShmemDeque from publisher to subscriber (or other way around?)
+    // 2. invent some signaling method
+
 }
 
 void talker::onInit()
@@ -68,7 +79,9 @@ void talker::onInit()
   ros::NodeHandle &private_nh = getPrivateNodeHandle();
 
   pub_ = nh.advertise<sensor_msgs::PointCloud2>("pcl", 1);
-  timer_ = nh.createTimer(ros::Duration(0.00001), &talker::timerCb, this);
+  timer_ = nh.createTimer(ros::Duration(0.1), &talker::timerCb, this);
+
+  deque_ = ros::MessageFactory::createDeque<sensor_msgs::PointCloud3>();
 
 }
 
