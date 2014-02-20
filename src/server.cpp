@@ -8,10 +8,9 @@
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "shm_server");
+  boost::interprocess::managed_shared_memory segment(boost::interprocess::create_only, "ros_test", 4000000000);
 
-  ROS_INFO("Creating shared memory segment...");
-  boost::interprocess::managed_shared_memory segment(boost::interprocess::create_only, "ros_test", 100000000);
+  ros::init(argc, argv, "shm_server");
   ROS_INFO("Created shared memory segment...");
 
   ros::spin();

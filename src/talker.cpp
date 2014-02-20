@@ -44,7 +44,7 @@ class talker : public nodelet::Nodelet
 {
   ros::Publisher pub_;
   ros::Timer timer_;
-  ros::ShmemDeque<sensor_msgs::PointCloud3>::IPtr deque_;
+//  ros::ShmemDeque::Ptr deque_;
 
   virtual void onInit();
 
@@ -55,18 +55,28 @@ class talker : public nodelet::Nodelet
 void talker::timerCb(const ros::TimerEvent& event)
 {
 //    ros::Time begin = ros::Time::now();
-    sensor_msgs::PointCloud2::Ptr m = boost::make_shared<sensor_msgs::PointCloud2>();
-    m->data.resize(4000000);
+    sensor_msgs::PointCloud3* m = ros::MessageFactory::createMessage<sensor_msgs::PointCloud3>();
+
+//    sensor_msgs::PointCloud3::Ptr m = boost::make_shared<sensor_msgs::PointCloud3>();
+    m->data.resize(10);
     m->header.stamp = ros::Time::now();
+
+//    pub_.publish(*m);
+
+
+    pub_.publishShmem(*m);
+
 //    ros::Time begin2 = ros::Time::now();
-    pub_.publish(m);
+//    fprintf(stderr, "sending message\n");
 //    ROS_INFO("msg.data.resize(size) - Elapsed time: %f & %f seconds", (begin2-begin).toSec(), (ros::Time::now()-begin2).toSec());
+/*
+    sensor_msgs::PointCloud3::VoidIPtr* m4 = (sensor_msgs::PointCloud3::VoidIPtr*)(&m2);
 
-    ROS_INFO("Trying to build pcl3");
-    sensor_msgs::PointCloud3::IPtr m2 = ros::MessageFactory::createMessage<sensor_msgs::PointCloud3>();
-    deque_->add(m2);
+    ros::ShmemDequeVoid::VoidIPtr m5(*m4);
+
+    deque_->add(m5);
     deque_->remove();
-
+*/
     // TODO:
     // 1. send UUID of ShmemDeque from publisher to subscriber (or other way around?)
     // 2. invent some signaling method
@@ -78,10 +88,11 @@ void talker::onInit()
   ros::NodeHandle &nh = getNodeHandle();
   ros::NodeHandle &private_nh = getPrivateNodeHandle();
 
-  pub_ = nh.advertise<sensor_msgs::PointCloud2>("pcl", 1);
-  timer_ = nh.createTimer(ros::Duration(0.1), &talker::timerCb, this);
+  pub_ = nh.advertise<sensor_msgs::PointCloud3>("pcl", 1);
+  timer_ = nh.createTimer(ros::Duration(0.0001), &talker::timerCb, this);
 
-  deque_ = ros::MessageFactory::createDeque<sensor_msgs::PointCloud3>();
+//  boost::uuids::uuid uuid = boost::uuids::random_generator()();
+//  deque_ = ros::MessageFactory::createDeque(boost::uuids::to_string(uuid).c_str());
 
 }
 
