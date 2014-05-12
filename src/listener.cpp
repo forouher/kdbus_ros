@@ -34,7 +34,7 @@
 
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
-#include <sensor_msgs/PointCloud3.h>
+//#include <sensor_msgs/PointCloud3.h>
 #include <sensor_msgs/PointCloud2.h>
 
 namespace kdbus_tests {
@@ -45,7 +45,7 @@ class listener : public nodelet::Nodelet
   ros::Timer timer_;
   int count_;
   virtual void onInit();
-  void cb(sensor_msgs::PointCloud3::ConstPtr p);
+  void cb(sensor_msgs::PointCloud2::ConstPtr p);
   void timerCb(const ros::TimerEvent& event);
 };
 
@@ -55,13 +55,13 @@ void listener::timerCb(const ros::TimerEvent& event)
     count_=0;
 }
 
-void listener::cb(sensor_msgs::PointCloud3::ConstPtr p)
+void listener::cb(sensor_msgs::PointCloud2::ConstPtr p)
 {
     if (!count_)
       ROS_INFO("I heard: [seq=%i, delay=%f]", p->header.seq,  (ros::Time::now() - p->header.stamp).toSec());
 
     count_++;
-    ros::MessageFactory::destroyMessage<sensor_msgs::PointCloud3>(&(*p));
+    //ros::MessageFactory::destroyMessage<sensor_msgs::PointCloud2>(&(*p));
 }
 
 void listener::onInit()

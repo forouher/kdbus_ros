@@ -8,7 +8,7 @@ SET(CMAKE_C_FLAGS "")
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED  roscpp std_msgs tf2_msgs nodelet)
+find_package(catkin REQUIRED  roscpp std_msgs nodelet)
 
 ## System dependencies are found with CMake's conventions
 #SET(CMAKE_INCLUDE_PATH "/home/forouher/src/boost_1_55_0")
@@ -30,7 +30,7 @@ find_package(Boost REQUIRED COMPONENTS system thread)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
    INCLUDE_DIRS include
-   CATKIN_DEPENDS roscpp std_msgs tf2_msgs
+   CATKIN_DEPENDS roscpp std_msgs
 )
 
 ###########
@@ -54,10 +54,10 @@ target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 #add_executable(alloc_test5 src/alloc_test5.cpp)
 #add_executable(test_writer src/kdbus-enum.c src/kdbus-util.c src/test_writer.cpp)
 #add_executable(test_reader src/kdbus-enum.c src/kdbus-util.c src/test_reader.cpp)
-add_executable(alloc_perf src/alloc_perf.cpp)
+#add_executable(alloc_perf src/alloc_perf.cpp)
 add_executable(server src/server.cpp)
 
-target_link_libraries(alloc_perf  ${catkin_LIBRARIES})
+#target_link_libraries(alloc_perf  ${catkin_LIBRARIES})
 target_link_libraries(server ${catkin_LIBRARIES})
 #target_link_libraries(alloc_test3 rt)
 #target_link_libraries(alloc_test5 rt ${catkin_LIBRARIES})

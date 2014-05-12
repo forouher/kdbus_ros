@@ -35,7 +35,7 @@
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <sensor_msgs/PointCloud3.h>
+//#include <sensor_msgs/PointCloud3.h>
 #include <ros/message_factory.h>
 
 namespace kdbus_tests {
@@ -54,16 +54,16 @@ class talker : public nodelet::Nodelet
 
 void talker::timerCb(const ros::TimerEvent& event)
 {
-//    ros::Time begin = ros::Time::now();
-    sensor_msgs::PointCloud3* m = ros::MessageFactory::createMessage<sensor_msgs::PointCloud3>();
+    ros::Time begin = ros::Time::now();
+    sensor_msgs::PointCloud2* m = ros::MessageFactory::createMessage<sensor_msgs::PointCloud2>();
 
-//    sensor_msgs::PointCloud3::Ptr m = boost::make_shared<sensor_msgs::PointCloud3>();
+    //sensor_msgs::PointCloud2::Ptr m = boost::make_shared<sensor_msgs::PointCloud2>();
     m->data.resize(10);
     m->header.stamp = ros::Time::now();
 
-//    pub_.publish(*m);
+//    pub_.publish(m);
 
-
+    // why *m ???
     pub_.publishShmem(*m);
 
 //    ros::Time begin2 = ros::Time::now();
@@ -88,8 +88,8 @@ void talker::onInit()
   ros::NodeHandle &nh = getNodeHandle();
   ros::NodeHandle &private_nh = getPrivateNodeHandle();
 
-  pub_ = nh.advertise<sensor_msgs::PointCloud3>("pcl", 1);
-  timer_ = nh.createTimer(ros::Duration(0.0001), &talker::timerCb, this);
+  pub_ = nh.advertise<sensor_msgs::PointCloud2>("pcl", 1);
+  timer_ = nh.createTimer(ros::Duration(0.1), &talker::timerCb, this);
 
 //  boost::uuids::uuid uuid = boost::uuids::random_generator()();
 //  deque_ = ros::MessageFactory::createDeque(boost::uuids::to_string(uuid).c_str());
