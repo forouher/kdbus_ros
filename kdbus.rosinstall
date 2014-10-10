@@ -194,7 +194,7 @@
     version: feature/indigo/kdbus}
 - git: {local-name: roscpp_core, uri: 'https://github.com/forouher/roscpp_core.git',
     version: feature/indigo/kdbus}
-- git: {local-name: kdbus_tests, uri: 'https://github.com/forouher/ros_kdbus.git',
+- git: {local-name: kdbus_ros, uri: 'https://github.com/forouher/kdbus_ros.git',
     version: feature/indigo/kdbus}
 - git: {local-name: geometry_experimental, uri: 'https://github.com/forouher/geometry_experimental.git',
     version: fix/indigo/kdbus}
